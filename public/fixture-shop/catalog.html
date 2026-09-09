@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Catalog of jackets, packs, and boots from Harbor & Oak." />
+    <title>Catalog — Harbor & Oak</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <strong>Harbor &amp; Oak Outfitters</strong>
+        <nav aria-label="Primary">
+          <ul>
+            <li><a href="./index.html">Home</a></li>
+            <li><a href="./catalog.html">Catalog</a></li>
+            <li><a href="./about.html">About</a></li>
+            <li><a href="./contact.html">Contact</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap">
+      <h1>Catalog</h1>
+      <form role="search" aria-label="Catalog search" class="search" action="./catalog.html" method="get">
+        <input type="search" name="q" placeholder="Search catalog" aria-label="Search catalog" />
+        <button type="submit">Search</button>
+      </form>
+      <aside class="filters" data-filters aria-label="Product filters">
+        <form>
+          <label>
+            Category
+            <select name="category">
+              <option value="">All</option>
+              <option value="jackets">Jackets</option>
+              <option value="packs">Packs</option>
+              <option value="boots">Boots</option>
+            </select>
+          </label>
+        </form>
+      </aside>
+      <div class="grid">
+        <article class="product-card" data-product="oak-anorak">
+          <h3 class="product-title">Oak Ridge Anorak</h3>
+          <p class="price">$189.00</p>
+          <button type="button">Add anorak</button>
+        </article>
+        <article class="product-card" data-product="storm-parka">
+          <h3 class="product-title">Storm Line Parka</h3>
+          <p class="price">$248.00</p>
+          <button type="button">Add parka</button>
+        </article>
+        <article class="product-card" data-product="harbor-pack">
+          <h3 class="product-title">Harbor 28 Pack</h3>
+          <p class="price">$142.00</p>
+          <button type="button">Add pack</button>
+        </article>
+        <article class="product-card" data-product="cedar-boot">
+          <h3 class="product-title">Cedar Trail Boot</h3>
+          <p class="price">$210.00</p>
+          <button type="button">Add boot</button>
+        </article>
+      </div>
+      <h2>Shipping estimator</h2>
+      <form class="stack" name="shipping" aria-label="Shipping calculator">
+        <label>
+          Destination ZIP
+          <input type="text" name="zip" placeholder="94107" required />
+        </label>
+        <label>
+          Item count
+          <input type="number" name="items" value="1" min="1" />
+        </label>
+        <button type="button">Estimate shipping</button>
+      </form>
+    </main>
+  </body>
+</html>

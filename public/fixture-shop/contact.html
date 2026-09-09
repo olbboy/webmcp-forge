@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Contact Harbor & Oak Outfitters." />
+    <title>Contact — Harbor & Oak</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <strong>Harbor &amp; Oak Outfitters</strong>
+        <nav aria-label="Primary">
+          <ul>
+            <li><a href="./index.html">Home</a></li>
+            <li><a href="./catalog.html">Catalog</a></li>
+            <li><a href="./about.html">About</a></li>
+            <li><a href="./contact.html">Contact</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap">
+      <h1>Contact</h1>
+      <p class="muted">Workshop questions, repairs, and wholesale.</p>
+      <form class="stack" name="contact" aria-label="Contact form" action="./contact.html" method="post">
+        <label>
+          Name
+          <input type="text" name="name" placeholder="Your name" required />
+        </label>
+        <label>
+          Email
+          <input type="email" name="email" placeholder="you@example.com" required />
+        </label>
+        <label>
+          Message
+          <textarea name="message" rows="4" placeholder="How can we help?" required></textarea>
+        </label>
+        <button type="submit">Send message</button>
+      </form>
+    </main>
+  </body>
+</html>

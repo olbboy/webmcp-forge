@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Harbor & Oak Outfitters — field jackets, packs, and boots built for wet weather."
+    />
+    <title>Harbor & Oak Outfitters</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <strong>Harbor &amp; Oak Outfitters</strong>
+        <nav aria-label="Primary">
+          <ul>
+            <li><a href="./index.html">Home</a></li>
+            <li><a href="./catalog.html">Catalog</a></li>
+            <li><a href="./about.html">About</a></li>
+            <li><a href="./contact.html">Contact</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap">
+      <h1>Clothes that survive the trailhead parking lot</h1>
+      <p class="muted">
+        Waxed canvas, solid hardware, and pockets that actually hold a map.
+      </p>
+      <form role="search" aria-label="Site search" class="search" action="./catalog.html" method="get">
+        <input
+          type="search"
+          name="q"
+          placeholder="Search jackets, packs, boots"
+          aria-label="Search the catalog"
+        />
+        <button type="submit">Search</button>
+      </form>
+      <h2>Featured gear</h2>
+      <div class="grid" aria-label="Featured products">
+        <article class="product-card" data-product="oak-anorak" itemscope itemtype="https://schema.org/Product">
+          <h3 class="product-title" itemprop="name">Oak Ridge Anorak</h3>
+          <p class="price" itemprop="price">$189.00</p>
+          <p>Waxed cotton pullover with a doubled hood.</p>
+          <a href="./catalog.html">View anorak</a>
+        </article>
+        <article class="product-card" data-product="harbor-pack" itemscope itemtype="https://schema.org/Product">
+          <h3 class="product-title" itemprop="name">Harbor 28 Pack</h3>
+          <p class="price" itemprop="price">$142.00</p>
+          <p>Daypack with a waterproof roll top.</p>
+          <a href="./catalog.html">View pack</a>
+        </article>
+        <article class="product-card" data-product="cedar-boot" itemscope itemtype="https://schema.org/Product">
+          <h3 class="product-title" itemprop="name">Cedar Trail Boot</h3>
+          <p class="price" itemprop="price">$210.00</p>
+          <p>Leather boot with a lugged sole.</p>
+          <a href="./catalog.html">View boot</a>
+        </article>
+      </div>
+      <h2>Newsletter</h2>
+      <form class="stack" name="newsletter" aria-label="Newsletter signup" action="./index.html" method="post">
+        <label>
+          Email
+          <input type="email" name="email" placeholder="you@example.com" required />
+        </label>
+        <button type="submit">Join the list</button>
+      </form>
+    </main>
+    <footer>
+      <div class="wrap">
+        <a href="./about.html">About</a> · <a href="./contact.html">Contact</a>
+      </div>
+    </footer>
+  </body>
+</html>
