@@ -274,7 +274,7 @@ export async function createScanJob(rawUrl: string): Promise<Omit<ScanJob, "id" 
  *
  * Runs before any content is read out of the page: order is the whole point.
  */
-async function assertConnectionWasPublic(
+export async function assertConnectionWasPublic(
   page: Page,
   response: Response | null,
   selfOrigin: string | undefined

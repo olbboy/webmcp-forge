@@ -135,6 +135,20 @@ Playwright's request interception is not a substitute here. It registers under
 Lightpanda and fires, but the route object has no `url()`, so there is nothing
 to decide on — and installing it makes navigation hang.
 
+## Scanning yourself is exempt, but only while developing
+
+The "Try the demo shop" button asks for a URL on the address the app is
+answering on. Deployed that is a public hostname the guard allows anyway, so the
+exemption is only ever needed in development, where the app answers on loopback.
+
+Working out which address that is turned out to be the awkward part. Next
+rewrites `request.url` to `localhost` whatever the browser asked for, and
+`localhost` and `127.0.0.1` are different origins, so the URL is no use; the
+`Host` header is the only record of what the caller actually typed. That header
+is set by the caller, which is precisely what must not be allowed to wave a URL
+past this check — so rather than trying to validate it, the exemption is off
+entirely when `NODE_ENV` is production.
+
 ## The escape hatch announces itself, and redirects never inherit it
 
 The test suite scans a fixture on 127.0.0.1, so the guard needs a way off. It is

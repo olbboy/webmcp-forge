@@ -136,9 +136,8 @@ describe("takeSlot", () => {
     process.env.SCAN_RATE_MAX_PER_DAY = "1000";
     process.env.SCAN_RATE_MAP_MAX = "100";
     for (let i = 0; i < 10_000; i++) takeSlot(`2001:db8:0:${i.toString(16)}::/64`);
-    // Nothing here asserts the exact size; the point is that ten thousand
-    // distinct callers cannot make this grow without limit.
-    expect(process.memoryUsage().heapUsed).toBeGreaterThan(0);
+    // Ten thousand distinct callers, a cap of a hundred: the map cannot have
+    // kept them all, and the limiter still answers.
     expect(takeSlot("2001:db8:0:0::/64").ok).toBe(true);
   });
 });
@@ -146,11 +145,28 @@ describe("takeSlot", () => {
 describe("acquireScan", () => {
   it("stops at the ceiling and lets go again on release", () => {
     process.env.SCAN_MAX_CONCURRENT = "2";
-    expect(acquireScan()).toBe(true);
-    expect(acquireScan()).toBe(true);
-    expect(acquireScan()).toBe(false);
-    releaseScan();
-    expect(acquireScan()).toBe(true);
+    const a = acquireScan();
+    const b = acquireScan();
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(acquireScan()).toBeNull();
+    releaseScan(a);
+    expect(acquireScan()).not.toBeNull();
+  });
+
+  it("gives back only the slot it was handed", () => {
+    // A request whose slot was reclaimed for being stale comes back and calls
+    // release anyway. Released by position rather than by token, that hands
+    // away whoever is holding a slot now, and the ceiling rises by one for the
+    // rest of the process.
+    vi.useFakeTimers();
+    process.env.SCAN_MAX_CONCURRENT = "1";
+    const stale = acquireScan();
+    vi.advanceTimersByTime(45_000 * 2 + 1);
+    const live = acquireScan();
+    expect(live).not.toBeNull();
+    releaseScan(stale);
+    expect(acquireScan(), "the live scan still holds the only slot").toBeNull();
   });
 
   it("reclaims a slot whose scan never finished", () => {
@@ -159,10 +175,10 @@ describe("acquireScan", () => {
     // every later request until the process restarted.
     vi.useFakeTimers();
     process.env.SCAN_MAX_CONCURRENT = "1";
-    expect(acquireScan()).toBe(true);
-    expect(acquireScan()).toBe(false);
+    expect(acquireScan()).not.toBeNull();
+    expect(acquireScan()).toBeNull();
     vi.advanceTimersByTime(45_000 * 2 + 1);
-    expect(acquireScan()).toBe(true);
+    expect(acquireScan()).not.toBeNull();
   });
 
   it("still succeeds when the limits are switched off, so release stays paired", () => {
@@ -171,16 +187,18 @@ describe("acquireScan", () => {
     // took, and the count would run negative.
     process.env[DISABLED] = "1";
     process.env.SCAN_MAX_CONCURRENT = "1";
-    expect(acquireScan()).toBe(true);
-    expect(acquireScan()).toBe(true);
-    releaseScan();
-    releaseScan();
-    releaseScan();
+    const a = acquireScan();
+    const b = acquireScan();
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    releaseScan(a);
+    releaseScan(b);
+    releaseScan(a);
 
     delete process.env[DISABLED];
     process.env.SCAN_MAX_CONCURRENT = "1";
-    expect(acquireScan()).toBe(true);
-    expect(acquireScan()).toBe(false);
+    expect(acquireScan()).not.toBeNull();
+    expect(acquireScan()).toBeNull();
   });
 });
 

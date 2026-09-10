@@ -67,11 +67,18 @@ async function countJobs(): Promise<number> {
   }
 }
 
-function scan(url: string, origin = "http://scanner.test") {
+/**
+ * `host` is what decides the development-only self-origin exemption. Next
+ * rewrites `request.url` to localhost whatever the browser asked for, so the
+ * header is the only record of the address the caller actually used.
+ */
+function scan(url: string, host?: string) {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (host) headers.host = host;
   return scanPost(
-    new Request(`${origin}/api/scan`, {
+    new Request("http://scanner.test/api/scan", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify({ url }),
     })
   );
@@ -123,7 +130,7 @@ describe("the pre-flight check", () => {
       res.end("<title>Demo</title><h1>Demo</h1>");
     });
     try {
-      const res = await scan(`${fixture.url}/`, fixture.url);
+      const res = await scan(`${fixture.url}/`, `127.0.0.1:${fixture.port}`);
       expect(res.status).toBe(200);
     } finally {
       await fixture.close();
@@ -147,11 +154,16 @@ describe("the post-navigation check", () => {
       // nothing: both servers are on loopback, and the pre-flight check would
       // stop the request before a browser ever opened it.
       onlyPostNavigation();
+      const before = await countJobs();
       const res = await scan(`${redirector.url}/`);
 
       expect(res.status).toBe(400);
       const body = (await res.json()) as { error?: string };
       expect(body.error).toMatch(/cannot be scanned/i);
+      // This guard fires after the job has been written, so the record has to
+      // be taken back with it. Otherwise a probe by redirect still leaves a
+      // file, which is what moving the first guard above the write prevented.
+      expect(await countJobs()).toBe(before);
     } finally {
       await redirector.close();
       await internal.close();

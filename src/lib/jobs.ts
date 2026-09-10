@@ -9,7 +9,7 @@ import { applySelection, buildManifest, generateEmbedJs } from "./generator";
 import { createKeyQueue } from "./key-queue";
 import { ScanBlockedError, assertScannableUrl } from "./net-guard";
 import { parseScanUrl, scanSite } from "./scanner";
-import { getJob, readArtifact, saveArtifact, saveJob } from "./store";
+import { deleteJob, getJob, readArtifact, saveArtifact, saveJob } from "./store";
 import type { ScanJob, SelectedTool } from "./types";
 
 const EMBED_FILENAME = "webmcp-forge.embed.js";
@@ -101,7 +101,7 @@ export async function runScan(
   await saveJob(pending);
 
   try {
-    const result = await scanSite(rawUrl);
+    const result = await scanSite(rawUrl, { selfOrigin });
     const ready: ScanJob = {
       ...pending,
       url: result.url,
@@ -118,7 +118,14 @@ export async function runScan(
     // A blocked address is the caller's mistake, not a failed scan. Recording
     // it as a job would answer 422 with a job object; letting it out reaches
     // the route's own handler and answers 400 with nothing attached.
-    if (err instanceof ScanBlockedError) throw err;
+    if (err instanceof ScanBlockedError) {
+      // The second guard fires after this job was written, so the record has to
+      // go with it. Otherwise every probe that arrives by redirect still leaves
+      // a file behind — the outcome the first guard was moved above the write
+      // to prevent.
+      await deleteJob(id);
+      throw err;
+    }
     const failed: ScanJob = {
       ...pending,
       status: "error",

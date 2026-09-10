@@ -137,8 +137,19 @@ export function takeSlot(
   return bump(windowCounts, key, now, windowMs(), maxPerWindow());
 }
 
-/** Scans in flight, by the moment each one started. */
-let inFlight: number[] = [];
+/**
+ * Scans in flight, each under a token of its own.
+ *
+ * A plain array released with `shift` gives back whichever slot is oldest
+ * rather than the one the caller took, and once a stale slot has been reclaimed
+ * the request that owned it comes back and releases somebody else's. Each of
+ * those raises the real ceiling by one, for good.
+ */
+const inFlight = new Map<number, number>();
+let nextToken = 1;
+
+/** What `acquireScan` hands back, and `releaseScan` needs to give it up. */
+export type ScanSlot = number | null;
 
 /**
  * A slot is a promise to release it, and a promise can be broken: a `finally`
@@ -150,24 +161,33 @@ let inFlight: number[] = [];
  */
 function reclaimStale(now: number): void {
   const cutoff = now - SCAN_TIMEOUT_MS * 2;
-  inFlight = inFlight.filter((startedAt) => startedAt > cutoff);
+  for (const [token, startedAt] of inFlight) {
+    if (startedAt <= cutoff) inFlight.delete(token);
+  }
 }
 
-export function acquireScan(): boolean {
-  // True when switched off, so the caller's try/finally stays symmetric. An
-  // acquire that is skipped while its release still runs drives the count
-  // negative and quietly raises the ceiling.
-  if (isRateLimitDisabled()) return true;
+/**
+ * Returns a token to release, or null when the ceiling is reached.
+ *
+ * A token is handed out even when the limits are off, so the caller's
+ * try/finally stays symmetric: an acquire that is skipped while its release
+ * still runs would give back a slot it never took.
+ */
+export function acquireScan(): ScanSlot {
+  if (isRateLimitDisabled()) return 0;
   const now = Date.now();
   reclaimStale(now);
-  if (inFlight.length >= maxConcurrent()) return false;
-  inFlight.push(now);
-  return true;
+  if (inFlight.size >= maxConcurrent()) return null;
+  const token = nextToken++;
+  inFlight.set(token, now);
+  return token;
 }
 
-export function releaseScan(): void {
-  if (isRateLimitDisabled()) return;
-  inFlight.shift();
+export function releaseScan(slot: ScanSlot): void {
+  if (slot === null || slot === 0) return;
+  // By token, so a request that outlived its slot being reclaimed cannot give
+  // away the slot somebody else is holding.
+  inFlight.delete(slot);
 }
 
 /** How long a caller should wait when the concurrency ceiling turned them away. */
@@ -178,5 +198,6 @@ export function concurrencyRetryAfterSeconds(): number {
 export function __resetForTests(): void {
   windowCounts.clear();
   dayCounts.clear();
-  inFlight = [];
+  inFlight.clear();
+  nextToken = 1;
 }

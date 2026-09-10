@@ -31,7 +31,9 @@ const BLOCKED_V4: ReadonlyArray<[string, number]> = [
   ["127.0.0.0", 8], // loopback
   ["169.254.0.0", 16], // link-local — every cloud's metadata service lives here
   ["172.16.0.0", 12], // RFC1918
+  ["192.0.0.0", 24], // IETF protocol assignments
   ["192.168.0.0", 16], // RFC1918
+  ["198.18.0.0", 15], // benchmarking
   ["224.0.0.0", 4], // multicast
   ["240.0.0.0", 4], // reserved
 ];
@@ -39,6 +41,11 @@ const BLOCKED_V4: ReadonlyArray<[string, number]> = [
 const BLOCKED_V6: ReadonlyArray<[string, number]> = [
   ["::", 128], // unspecified
   ["::1", 128], // loopback
+  // Three ways to wrap an IPv4 address in an IPv6 one. Each of them can carry
+  // a loopback or private address past a check that only knows the v6 ranges.
+  ["::", 96], // IPv4-compatible, e.g. ::127.0.0.1
+  ["2002::", 16], // 6to4, e.g. 2002:7f00:1::
+  ["64:ff9b::", 96], // NAT64
   ["fc00::", 7], // unique local
   ["fe80::", 10], // link-local
   ["ff00::", 8], // multicast
@@ -177,6 +184,16 @@ let warnedAboutEscapeHatch = false;
  * deploy time does not stop someone adding it to `.env` a month later to debug
  * one site and forgetting to take it out.
  */
+/**
+ * Reads the escape hatch once at startup so the warning lands in the log a
+ * deploy is checked against. Left to the first scan, the line only appears once
+ * somebody happens to use the endpoint, which is exactly when nobody is looking
+ * at the log for it.
+ */
+export function warnIfEscapeHatchOpen(): void {
+  allowPrivateHosts();
+}
+
 export function allowPrivateHosts(): boolean {
   const on = process.env.SCAN_ALLOW_PRIVATE_HOSTS === "1";
   if (on && !warnedAboutEscapeHatch) {
@@ -229,9 +246,19 @@ export async function assertScannableUrl(
   // guard ends up proving only that the first one works.
   if (!options?.ignoreEscapeHatch && allowPrivateHosts()) return;
 
+  // `URL` keeps the brackets on an IPv6 literal, and dns.lookup rejects them,
+  // so this used to end up refusing every bracketed address by way of a
+  // resolver error. That happened to be safe and was not the check doing its
+  // job: a literal is already an address and deserves the range test directly.
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  if (isIP(hostname) !== 0) {
+    if (isBlockedIp(hostname)) throw new ScanBlockedError();
+    return;
+  }
+
   let records: Array<{ address: string }>;
   try {
-    records = await dns.lookup(url.hostname, { all: true });
+    records = await dns.lookup(hostname, { all: true });
   } catch {
     // A name that will not resolve is not scannable either way, and failing
     // closed keeps resolver errors from becoming a way around the check.

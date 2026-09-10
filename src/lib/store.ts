@@ -97,6 +97,12 @@ export async function getJob(id: string): Promise<ScanJob | null> {
   }
 }
 
+/** Removes a job record. Used when a job should never have been written. */
+export async function deleteJob(id: string): Promise<void> {
+  if (!isJobId(id)) return;
+  await unlink(path.join(jobsDir(), `${id}.json`)).catch(() => {});
+}
+
 export async function saveArtifact(
   id: string,
   filename: string,

@@ -120,7 +120,6 @@ describe("click_by_text is limited to what the scan saw", () => {
   });
 
   it("is not offered at all when the page has nothing to click", async () => {
-    const empty = { candidates: [] as ToolCandidate[] };
     // proposeTools is exercised through scanSite elsewhere; here the point is
     // the contract: no controls, no tool.
     const { proposeTools } = await import("@/lib/heuristics");
@@ -142,7 +141,32 @@ describe("click_by_text is limited to what the scan saw", () => {
       "https://example.test"
     );
     expect(tools.some((t) => t.kind === "click_by_text")).toBe(false);
-    expect(empty.candidates).toHaveLength(0);
+    // The read-only tools are still offered; only the click tool goes.
+    expect(tools.some((t) => t.kind === "get_page_info")).toBe(true);
+  });
+
+  it("drops the tool for an old job whose pages recorded no controls", async () => {
+    const fixture = await startFixtureServer();
+    try {
+      const scan = await scanSite(`${fixture.url}/index.html`);
+      const click = scan.candidates.find((c) => c.kind === "click_by_text");
+      const legacy: ToolCandidate = { ...(click as ToolCandidate) };
+      delete legacy.metadata;
+
+      // A site of links, scanned before links were recorded. Nothing can be
+      // recovered, and shipping a control that refuses every call is worse
+      // than shipping none: an agent cannot tell it from a broken one.
+      const job = jobFrom({
+        ...scan,
+        candidates: [legacy],
+        pages: scan.pages.map((p) => ({ ...p, buttons: [] })),
+      });
+
+      const rebuilt = applySelection(job, undefined);
+      expect(rebuilt.some((t) => t.kind === "click_by_text")).toBe(false);
+    } finally {
+      await fixture.close();
+    }
   });
 
   it("recovers a list for a job scanned before allowlists existed", async () => {
@@ -165,6 +189,13 @@ describe("click_by_text is limited to what the scan saw", () => {
         (rebuiltClick?.metadata?.allowlist as string[]).length,
         "an old job must not come back with a tool that refuses everything"
       ).toBeGreaterThan(0);
+      // The description and schema are what an agent reads before calling, so
+      // repairing the list without them would advertise the old contract.
+      expect(rebuiltClick?.description).toMatch(/Only these exact labels work/);
+      const textSchema = rebuiltClick?.inputSchema.properties.text as
+        | { enum?: string[] }
+        | undefined;
+      expect(textSchema?.enum?.length).toBeGreaterThan(0);
     } finally {
       await fixture.close();
     }

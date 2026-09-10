@@ -43,6 +43,13 @@ describe("isBlockedIp", () => {
     ["multicast v6", "ff02::1"],
     ["IPv4-mapped loopback", "::ffff:127.0.0.1"],
     ["IPv4-mapped metadata", "::ffff:169.254.169.254"],
+    ["IPv4-compatible loopback", "::127.0.0.1"],
+    ["IPv4-compatible loopback, hex form", "::7f00:1"],
+    ["6to4 wrapping loopback", "2002:7f00:1::"],
+    ["6to4 wrapping RFC1918", "2002:a00:1::"],
+    ["NAT64 wrapping loopback", "64:ff9b::7f00:1"],
+    ["benchmarking range", "198.18.0.1"],
+    ["IETF protocol assignments", "192.0.0.1"],
     ["not an address at all", "not-an-ip"],
   ] as const;
 
@@ -103,6 +110,24 @@ describe("assertScannableUrl", () => {
       await expect(
         assertScannableUrl(new URL("http://169.254.169.254/"))
       ).rejects.toThrow(ScanBlockedError);
+    })
+  );
+
+  it(
+    "judges a bracketed IPv6 literal on its own merits, not by a resolver error",
+    withGuardOn(async () => {
+      // These never reach DNS: the brackets made lookup throw, which refused
+      // them for the wrong reason and would have stopped refusing them if Node
+      // ever started accepting the syntax.
+      await expect(
+        assertScannableUrl(new URL("http://[::1]/"))
+      ).rejects.toThrow(ScanBlockedError);
+      await expect(
+        assertScannableUrl(new URL("http://[::7f00:1]/"))
+      ).rejects.toThrow(ScanBlockedError);
+      await expect(
+        assertScannableUrl(new URL("http://[2606:4700:4700::1111]/"))
+      ).resolves.toBeUndefined();
     })
   );
 

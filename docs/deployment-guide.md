@@ -32,6 +32,15 @@ Read at runtime, never baked into an image.
 | `SCANNER_CDP_URL` | Where Lightpanda listens. `http://127.0.0.1:9222` |
 | `BROWSER_IDLE_MS` | Idle wait before the browser is closed. Default five minutes |
 | `WEBMCP_DATA_DIR` | Job storage. `/data` in the container |
+| `SCAN_RATE_WINDOW_MS` | Rate-limit window. Default 30000 |
+| `SCAN_RATE_MAX_PER_WINDOW` | Scans per address per window. Default 1 |
+| `SCAN_RATE_MAX_PER_DAY` | Scans per address per UTC day. Default 20 |
+| `SCAN_RATE_UNKNOWN_PER_DAY` | Ceiling for callers whose address could not be read, shared by all of them. Default 200 |
+| `SCAN_MAX_CONCURRENT` | Scans running at once. Default 1; raise only against a measurement of that many in parallel |
+| `SCAN_RATE_MAP_MAX` | Hard cap on each counter map. Default 5000 |
+| `SCAN_RATE_LIMIT_DISABLED` | `1` switches the limits off. The test suite sets it; production must not |
+| `SCAN_ENFORCE_CONNECTED_IP` | `0` switches off the check that runs after navigation. A way to undo it without rebuilding |
+| `SCAN_ALLOW_PRIVATE_HOSTS` | `1` lets the scanner reach private addresses. **Never set in production.** The app logs a warning at startup while it is on, so `docker compose logs app` will say so |
 
 Live values are in `/opt/webmcp-forge/.env` on the droplet, mode 600. A copy
 from before the Lightpanda switch is at `.env.bak.before-lightpanda`.

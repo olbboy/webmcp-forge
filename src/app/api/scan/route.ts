@@ -20,6 +20,31 @@ export const maxDuration = 60;
  */
 const HARD_TIMEOUT_MS = SCAN_TIMEOUT_MS * 2;
 
+/**
+ * The origin to exempt from the scan guard, or nothing.
+ *
+ * The "Try the demo shop" button asks for a URL on the address the app is
+ * answering on. Deployed that is a public hostname the guard allows anyway, so
+ * the exemption is only ever needed while developing, where the app answers on
+ * loopback.
+ *
+ * It is read from the Host header, because Next rewrites `request.url` to
+ * `localhost` regardless of what the browser asked for, and `localhost` and
+ * `127.0.0.1` are different origins. A header the caller controls is exactly
+ * what must not decide this in production — which is why the whole thing is
+ * switched off there rather than validated.
+ */
+function developmentSelfOrigin(request: Request): string | undefined {
+  if (process.env.NODE_ENV === "production") return undefined;
+  const host = request.headers.get("host");
+  if (!host) return undefined;
+  try {
+    return new URL(`http://${host}`).origin;
+  } catch {
+    return undefined;
+  }
+}
+
 function tooMany(message: string, retryAfterSeconds: number): Response {
   return Response.json(
     { error: message },
@@ -41,7 +66,8 @@ export async function POST(request: Request) {
   // The concurrency ceiling is checked first on purpose. Turned away by it, a
   // caller has not had a scan; charging them one against their daily quota for
   // a request the server declined to run is the wrong way round.
-  if (!acquireScan()) {
+  const slotToken = acquireScan();
+  if (slotToken === null) {
     return tooMany(
       "Too many scans running right now. Try again shortly.",
       concurrencyRetryAfterSeconds()
@@ -57,15 +83,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Where this app is answering. The demo button asks for a URL on this very
-    // origin, which in development is localhost — an address the scan guard
-    // refuses for everyone else.
-    let selfOrigin: string | undefined;
-    try {
-      selfOrigin = new URL(request.url).origin;
-    } catch {
-      selfOrigin = undefined;
-    }
+    const selfOrigin = developmentSelfOrigin(request);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -95,6 +113,6 @@ export async function POST(request: Request) {
   } finally {
     // Paired with the acquire above, and outside every early return. A slot
     // that leaks here is a slot nobody gets back.
-    releaseScan();
+    releaseScan(slotToken);
   }
 }

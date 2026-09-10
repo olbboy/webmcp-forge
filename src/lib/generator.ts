@@ -28,11 +28,17 @@ export function applySelection(
     if (sel.enabled === false) continue;
     const base = byId.get(sel.id);
     if (!base) continue;
+    const repaired = withClickAllowlist(base, job);
+    // Nothing safe to offer. Shipping the tool with an empty list would give
+    // the site a control that refuses every call, which is worse than not
+    // having it: the agent cannot tell a locked door from a broken one.
+    if (repaired === null) continue;
     const name = sanitizeToolName(sel.name || base.name, used);
     out.push({
-      ...withClickAllowlist(base, job),
+      ...repaired,
       name,
-      description: (sel.description || base.description).trim() || base.description,
+      description:
+        sel.description?.trim() || repaired.description || base.description,
       enabled: true,
     });
   }
@@ -52,13 +58,38 @@ export function applySelection(
  * never recorded one, and the labels are recovered from the pages the job
  * already holds. Empty means a scan that looked and found no controls.
  */
-function withClickAllowlist(tool: ToolCandidate, job: ScanJob): ToolCandidate {
+function withClickAllowlist(
+  tool: ToolCandidate,
+  job: ScanJob
+): ToolCandidate | null {
   if (tool.kind !== "click_by_text") return tool;
   if (tool.metadata?.allowlist !== undefined) return tool;
 
   const allowlist = clickableAllowlist(job.pages ?? []);
+  // An older job whose pages recorded no controls — a site of links, scanned
+  // before links counted. Nothing can be recovered, so the tool goes rather
+  // than shipping one that says no to everything.
+  if (allowlist.length === 0) return null;
+
   return {
     ...tool,
+    // The description and schema are what an agent reads before calling, so
+    // they have to describe the same rule the runtime enforces. Repairing the
+    // list and leaving the old wording would advertise a tool that takes any
+    // string while the code accepts only these.
+    description: `Click one of the buttons or links found on this site. Only these exact labels work: ${allowlist.join(" | ")}`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: {
+          type: "string",
+          description:
+            "The exact label to click, from the allowed list (case-insensitive).",
+          enum: allowlist,
+        },
+      },
+      required: ["text"],
+    },
     metadata: {
       ...tool.metadata,
       allowlist,
