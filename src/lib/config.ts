@@ -1,6 +1,12 @@
 export const MAX_PAGES = 8;
 export const PAGE_TIMEOUT_MS = 15_000;
 export const SCAN_TIMEOUT_MS = 45_000;
+/**
+ * How long the shared browser may sit unused before it is shut down. Chrome
+ * costs a few hundred megabytes, and this server shares a small box with other
+ * work, so an idle browser is memory taken from a neighbour for nothing.
+ */
+export const BROWSER_IDLE_MS = 5 * 60_000;
 export const ROBOTS_TIMEOUT_MS = 3_000;
 export const LOCAL_RELAY_SRC =
   "https://cdn.jsdelivr.net/npm/@mcp-b/webmcp-local-relay@latest/dist/browser/embed.js";
