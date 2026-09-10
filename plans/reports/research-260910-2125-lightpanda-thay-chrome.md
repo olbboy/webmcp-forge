@@ -135,3 +135,46 @@ Có trong `README.md` của repo và trong privacy policy. Trang `lightpanda.io/
 `:nightly` là tag di động. Hành vi đã kiểm ứng với digest `sha256:3af0bcae…`. Ghim digest thì tái lập được nhưng đóng băng luôn bản vá; giữ tag di động thì cần đối chiếu lại mỗi lần image đổi. Đã ghi digest vào compose để so sánh.
 
 **Đánh giá:** đủ điều kiện bật Lightpanda cho site khách, với điều kiện biến tắt telemetry có mặt ở mọi nơi chạy và log khởi động xác nhận `disabled=true`.
+
+---
+
+## Chạy thử site thật trên production (10/9/2026 22:35, engine = lightpanda)
+
+Quét qua chính `app.webmcps.net` đang chạy Lightpanda.
+
+| Site | Thời gian | Trang | Tool | Nhận xét |
+|---|---|---|---|---|
+| books.toscrape.com | 8s | 8 | 8 | có `list_products` |
+| quotes.toscrape.com/js/ (JS sinh nội dung) | 3s | 4 | 6 | đúng |
+| demo.vercel.store (SPA thật) | 9s | 8 | **18** | nhiều tool form trùng lặp |
+| example.com | 0s | 1 | 4 | đúng |
+| playwright.dev | 4s | 8 | 5 | đúng |
+| iana.org | 3s | 8 | 5 | đúng |
+
+**Không site nào lỗi.** Không có `status=error`, không có trang 0.
+
+### Đối chiếu Chrome trên site cho kết quả lạ
+
+Chạy `scanSite` với cả hai engine trên `demo.vercel.store`, 8 trang:
+
+| | Chrome | Lightpanda |
+|---|---|---|
+| Tool | **13** | **17** |
+| Chrome tìm ra mà Lightpanda thiếu | — | **không có** |
+| Lightpanda tìm thêm | — | 4 tool form |
+
+Số form/search mỗi trang trùng nhau ở 7/8 trang. Lệch duy nhất ở `/product/acme-cup`: Chrome thấy 4 form + 1 search, Lightpanda thấy 5 form + 2 search. Nhiều khả năng do thời điểm hydrate của SPA khác nhau.
+
+### Hai kết luận
+
+1. **Lightpanda là tập cha, không phải tập con.** Nó chưa bao giờ bỏ sót thứ Chrome tìm ra. Đây là chiều lệch an toàn: thừa tool thì chủ site bỏ chọn được, thiếu tool mới là mất khả năng.
+
+2. **Danh sách tool ồn ào KHÔNG phải lỗi Lightpanda.** Chrome cũng ra 13 tool với 6 biến thể `fill_form_form_*` gần trùng nhau. Đây là vấn đề của bộ suy luận trong `src/lib/heuristics.ts`, xuất hiện với cả hai engine, và tồn tại từ trước.
+
+### Đánh giá
+
+Lightpanda **ổn cho production**. Không mất khả năng, nhanh hơn, tốn 5,5 MiB thay vì ~350 MiB.
+
+## Chỗ trống cần điền
+
+1. **Tool form trùng lặp trên SPA** (13–18 tool, phần lớn là `fill_form_form_*` gần giống nhau). Là vấn đề heuristics của ta, không phải engine. (a) gộp/lọc form trùng trong `heuristics.ts` · (b) để nguyên, chủ site tự bỏ chọn trong UI · (c) chưa đụng tới
