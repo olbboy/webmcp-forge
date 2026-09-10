@@ -1,0 +1,40 @@
+# Deployment for a droplet shared with other production services.
+#
+# Nothing is published to the host. The tunnel reaches the app over the compose
+# network, so no inbound port is opened and the droplet's address stays out of
+# DNS. Memory limits are the point of this file: an unbounded headless browser
+# on a 2 GB box would put the neighbouring services at risk.
+
+services:
+  app:
+    build: .
+    image: webmcp-forge:local
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Job JSON lives here. Bind mount rather than a named volume so a backup
+      # is a plain directory copy.
+      - ./data:/data
+    # Peak is roughly 250 MB for the server plus 400-600 MB for a browser
+    # scanning up to eight pages. The cap means an overrun kills this container
+    # and nothing else on the box.
+    mem_limit: 900m
+    memswap_limit: 1500m
+    cpus: 1.0
+    # Chrome writes to /dev/shm and the default 64 MB is too small for it.
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:43127/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # Ingress rules live in Cloudflare, not here, so the token is all it needs.
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    depends_on:
+      - app
+    mem_limit: 128m

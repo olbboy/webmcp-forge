@@ -1,0 +1,20 @@
+# Keep the build context small and keep local secrets out of the image.
+node_modules
+.next
+.git
+.wrangler
+
+# Local environment files. The container reads its own .env at run time.
+.env
+.env.*
+
+# Job data belongs on the mounted volume, never baked into an image.
+data
+
+# Not needed to run the app.
+plans
+docs
+cdn
+tests
+*.md
+!README.md
