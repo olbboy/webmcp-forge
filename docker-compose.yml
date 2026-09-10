@@ -21,9 +21,12 @@ services:
       # Job JSON lives here. Bind mount rather than a named volume so a backup
       # is a plain directory copy.
       - ./data:/data
-    # Peak is roughly 250 MB for the server plus 400-600 MB for a browser
-    # scanning up to eight pages. The cap means an overrun kills this container
-    # and nothing else on the box.
+    # Measured on the droplet with two scans of real sites running at once:
+    # this container peaked at 175 MB and the browser container at 56 MB. The
+    # 400-600 MB this comment used to quote was for Chrome; the deployment runs
+    # Lightpanda, which has no rendering engine. The cap stays where it is —
+    # it exists so an overrun kills this container and nothing else on the box,
+    # and headroom costs nothing until it is used.
     mem_limit: 900m
     memswap_limit: 1500m
     cpus: 1.0

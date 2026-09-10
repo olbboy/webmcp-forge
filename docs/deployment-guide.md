@@ -157,6 +157,13 @@ Bring them up together rather than restarting the app alone.
 Chrome costs roughly 350 MB during a scan; Lightpanda about 20 MB. On a shared
 2 GB box that difference is the reason the engine is a choice at all.
 
+Measured on 2026-09-11 under Lightpanda, with two scans of real sites running
+at once: the app container peaked at 175 MB of its 900 MB cap and the browser
+container at 56 MB of its 256 MB. `SCAN_MAX_CONCURRENT` is set to 2 on the
+strength of that measurement. Raising it further wants the same measurement
+again at the new number — the ceiling that matters is `memory.current` of both
+cgroups, not `anon`, and not what `docker stats` reports.
+
 ## Checks that have earned their place
 
 - `docker compose logs lightpanda | grep "telemetry status"` after any image
