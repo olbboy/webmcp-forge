@@ -49,9 +49,14 @@ export function isRateLimitDisabled(): boolean {
  * caller a way to pick a fresh bucket per request. The last entry is the hop
  * that reached us.
  */
+let reportedSource = false;
+
 export function clientIp(request: Request): string | null {
   const direct = request.headers.get("cf-connecting-ip");
-  if (direct && direct.trim()) return direct.trim();
+  if (direct && direct.trim()) {
+    reportSource("cf-connecting-ip");
+    return direct.trim();
+  }
 
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
@@ -59,9 +64,27 @@ export function clientIp(request: Request): string | null {
       .split(",")
       .map((hop) => hop.trim())
       .filter(Boolean);
-    if (hops.length > 0) return hops[hops.length - 1];
+    if (hops.length > 0) {
+      reportSource(`x-forwarded-for (${hops.length} hop(s))`);
+      return hops[hops.length - 1];
+    }
   }
+  reportSource("none");
   return null;
+}
+
+/**
+ * Says once which header the address came from.
+ *
+ * Whether `CF-Connecting-IP` survives the tunnel decides whether these limits
+ * count real callers or drop everyone into one shared bucket, and there is no
+ * way to know from outside. The name of the header is logged and never its
+ * value: the value is somebody's address.
+ */
+function reportSource(source: string): void {
+  if (reportedSource) return;
+  reportedSource = true;
+  console.info(`[webmcp-forge] client address read from: ${source}`);
 }
 
 export function rateKey(ip: string | null): string {
@@ -196,6 +219,7 @@ export function concurrencyRetryAfterSeconds(): number {
 }
 
 export function __resetForTests(): void {
+  reportedSource = false;
   windowCounts.clear();
   dayCounts.clear();
   inFlight.clear();
