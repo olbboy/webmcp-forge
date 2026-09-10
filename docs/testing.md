@@ -1,7 +1,7 @@
 # Testing
 
 ```bash
-npm test        # 72 tests across 11 files, about 36 seconds
+npm test        # 80 tests across 12 files, about 37 seconds
 npm run lint
 npx tsc --noEmit
 ```
@@ -14,6 +14,7 @@ vitest as everything else.
 
 | File | What it pins |
 | --- | --- |
+| `store.test.ts` | A save is never visible half-written, and leaves nothing behind |
 | `scanner.test.ts` | Finds nav, search, forms and product cards on the fixture shop |
 | `extract` via `scanner.test.ts` | Snapshot shape from a real page |
 | `heuristics` via `form-merging.test.ts` | One form found on many pages is one tool |
@@ -41,8 +42,16 @@ survived and had to be caught:
 - The supersede check inside the queue had no coverage until a test held one
   request open long enough for two others to line up behind it.
 
+- Saving a job through a temporary file was first tested by watching the
+  directory during a write. That caught a plain write reliably but caught a
+  scratch file misnamed `.json` only one run in three. The invariant the backup
+  actually depends on is the name, so the name is asserted directly and the
+  racing test kept for the end-to-end property.
+
 When adding behaviour worth trusting, break it on purpose and confirm something
-turns red.
+turns red. The store fix was held against five mutations — plain write, missing
+rename, `.json` scratch name, fixed scratch name, scratch in another directory
+— each caught on every one of three runs.
 
 ## What the suite does not cover
 

@@ -82,10 +82,11 @@ Archives land in `/backups/webmcp-forge`, newest fourteen kept. That path is
 outside the checkout on purpose: a deploy runs `git reset --hard`, and backups
 should not be within reach of it.
 
-Each archive is unpacked and every job parsed before it counts as a backup,
-because job saves are not atomic and `tar` reports success over a truncated
-file. A run that fails verification retries once, then exits non-zero leaving
-no new archive. It builds under a scratch name and renames only on success, so
+Each archive is unpacked and every job parsed before it counts as a backup.
+Saves go through a temporary file and a rename, so `tar` should never meet a
+half-written job, but `tar` reports success over a truncated file either way
+and an archive nobody has opened is only a file. A run that fails verification
+retries once, then exits non-zero leaving no new archive. It builds under a scratch name and renames only on success, so
 a failed run cannot damage the archives already held.
 
 Restoring, with the app stopped so it does not write underneath the copy:
@@ -163,6 +164,5 @@ Chrome costs roughly 350 MB during a scan; Lightpanda about 20 MB. On a shared
 
 ## Not done yet
 
-- Job saves are a plain write, not a temp file and a rename. A crash mid-save can leave a truncated job on disk. The backup detects this rather than preventing it.
 - `ufw` is inactive. Nothing here opens a port, so this is unchanged rather
   than made worse.
