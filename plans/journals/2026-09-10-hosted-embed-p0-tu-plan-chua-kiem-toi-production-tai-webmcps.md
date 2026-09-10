@@ -69,7 +69,7 @@ Một agent review được dặn rõ "chỉ báo cáo, KHÔNG sửa file" đã 
 
 ## Chưa giải quyết
 
-- Workers Logs có che header `Authorization` không → publish token có thể nằm trong log Cloudflare
+- ~~Workers Logs có che header `Authorization` không~~ → **đã chốt cuối phiên.** Runtime che khi tên header là `cookie`/`set-cookie` hoặc chứa `auth`/`key`/`secret`/`token`/`jwt`. Đo trên Worker thật: `authorization` ra `REDACTED`, cùng giá trị đó trong `x-probe-marker` thì hiện nguyên. Chi tiết và giới hạn: `cdn/README.md`
 - Nguyên nhân dockerd phình 443 MiB; nên đo lại sau 2-4 tuần
 - `data/jobs` chưa có sao lưu định kỳ
 - `ufw` vẫn tắt

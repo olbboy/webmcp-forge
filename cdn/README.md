@@ -85,12 +85,31 @@ test command for this folder.
 - **Free-tier ceilings:** 100,000 Worker requests per day, 100,000 KV reads per
   day, 1,000 KV writes per day, and one write per second to the same key.
 
-## Open question before production
+## The publish token does not reach the logs
 
-`observability.enabled` is on in `wrangler.jsonc`. Cloudflare's Workers Logs
-docs say each invocation records "the Request, Response, and related metadata"
-but do not say whether the `Authorization` header is redacted. If it is not,
-`PUBLISH_TOKEN` sits in Cloudflare's logs for the retention window. Confirm
-this with Cloudflare, or turn observability off, before deploying to
-production. Rotating the token is `wrangler secret put PUBLISH_TOKEN` followed
-by updating `CDN_PUBLISH_TOKEN` in the Forge environment.
+`observability.enabled` is on in `wrangler.jsonc`, and each invocation records
+the request. The runtime redacts before the trace event leaves it: a header
+value becomes the string `REDACTED` when the name is `cookie`/`set-cookie`, or
+contains `auth`, `key`, `secret`, `token` or `jwt`, case-insensitively
+([Tail handler docs](https://developers.cloudflare.com/workers/runtime-apis/handlers/tail/)).
+`Authorization` matches, so `PUBLISH_TOKEN` is never written out.
+
+Measured against the deployed Worker rather than taken on trust. A throwaway
+canary was sent in `authorization` and in `x-probe-marker` on the same request:
+the first came back `REDACTED`, the second verbatim. A second probe put one
+value in `authorization`, `proxy-authorization`, `cookie`, `x-api-key` and
+`x-custom-secret` at once, and all five were redacted.
+
+Two things this does not license:
+
+- The rule reads header **names**, not values. A secret in a header named
+  anything else is logged in full — which is exactly what `x-probe-marker`
+  showed. Keep credentials in `Authorization`.
+- The reading came through `wrangler tail`, which consumes the same trace event
+  Workers Logs does. Since the runtime offers tail consumers a `getUnredacted()`
+  escape hatch, this is strong evidence about stored logs rather than proof.
+  Confirming the stored records needs an API token with observability read,
+  which this project's token does not carry.
+
+Rotating the token is `wrangler secret put PUBLISH_TOKEN` followed by updating
+`CDN_PUBLISH_TOKEN` in the Forge environment.

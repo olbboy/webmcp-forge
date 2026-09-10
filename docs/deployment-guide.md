@@ -126,11 +126,13 @@ Chrome costs roughly 350 MB during a scan; Lightpanda about 20 MB. On a shared
   the container memory limits.
 - `docker stats` reports the cgroup total, which includes page cache. To see
   what the app actually holds, read `anon` from the cgroup's `memory.stat`.
+- Credentials belong in `Authorization`, nowhere else. The runtime redacts a
+  logged header only when its name is `cookie`/`set-cookie` or contains `auth`,
+  `key`, `secret`, `token` or `jwt`. Verified against the deployed Worker; the
+  reasoning and its limits are in [cdn/README.md](../cdn/README.md).
 
 ## Not done yet
 
 - `data/jobs` has no scheduled backup. A lost droplet is lost jobs.
 - `ufw` is inactive. Nothing here opens a port, so this is unchanged rather
   than made worse.
-- Whether Cloudflare's Workers Logs redact the `Authorization` header is not
-  established. If they do not, the publish token sits in their logs.
