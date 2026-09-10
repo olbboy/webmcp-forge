@@ -24,7 +24,7 @@ import {
   pathAllowedByRobots,
   robotsDisallowsAll,
 } from "./robots";
-import type { PageSnapshot, ScanJob, ToolCandidate } from "./types";
+import type { PageSnapshot, ToolCandidate } from "./types";
 
 let browserPromise: Promise<Browser> | null = null;
 /** Scans in flight. The browser is only a candidate for shutdown at zero. */
@@ -247,16 +247,6 @@ async function runScan(
   };
 }
 
-export async function createScanJob(rawUrl: string): Promise<Omit<ScanJob, "id" | "createdAt" | "updatedAt" | "status" | "includeLocalRelay">> {
-  const result = await scanSite(rawUrl);
-  return {
-    url: result.url,
-    origin: result.origin,
-    pages: result.pages,
-    candidates: result.candidates,
-    robotsDisallowAll: result.robotsDisallowAll,
-  };
-}
 
 /**
  * The second check: what the browser actually connected to, after it followed

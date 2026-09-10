@@ -132,8 +132,11 @@ Scanning is limited to addresses on the public internet. A URL that resolves
 into a private range — loopback, RFC1918, or the link-local block every cloud
 serves its metadata from — is refused before a browser is opened, and so is a
 redirect that lands in one. The check runs twice: once on the address given, and
-once on what the browser actually connected to. `robots.txt` follows the same
-rule, since it is fetched separately.
+once after the browser has followed whatever redirects it was handed. What that
+second check can see depends on the engine — Chrome reports the address it
+dialled, Lightpanda does not, so under Lightpanda the redirect chain is
+re-resolved instead. `robots.txt` follows the same rule, since it is fetched
+separately.
 
 Scans are also rate limited per client address, and only a small number run at
 once, because each one costs a browser. Over the limit the endpoint answers 429
