@@ -131,13 +131,36 @@ describe("takeSlot", () => {
     expect(takeSlot("unknown").ok).toBe(false);
   });
 
+  it("cannot be reset by flooding the map with fresh keys", () => {
+    // Evicting anything let a caller clear their own daily count: reach the
+    // ceiling, then send traffic from enough fresh addresses that the entry
+    // counting your scans is the one thrown out. Least-recently-used does not
+    // help — the flooder simply stops touching their own key. So a full map of
+    // live counters refuses new keys instead of making room.
+    process.env.SCAN_RATE_MAX_PER_WINDOW = "1000";
+    process.env.SCAN_RATE_MAX_PER_DAY = "2";
+    process.env.SCAN_RATE_MAP_MAX = "10";
+
+    expect(takeSlot("1.2.3.4").ok).toBe(true);
+    expect(takeSlot("1.2.3.4").ok).toBe(true);
+    expect(takeSlot("1.2.3.4").ok, "the daily ceiling is reached").toBe(false);
+
+    for (let i = 0; i < 200; i++) takeSlot(`10.0.0.${i}`);
+
+    expect(
+      takeSlot("1.2.3.4").ok,
+      "the flood must not have handed back a fresh allowance"
+    ).toBe(false);
+  });
+
   it("keeps the counter maps bounded under a flood of fresh keys", () => {
     process.env.SCAN_RATE_MAX_PER_WINDOW = "1000";
     process.env.SCAN_RATE_MAX_PER_DAY = "1000";
     process.env.SCAN_RATE_MAP_MAX = "100";
     for (let i = 0; i < 10_000; i++) takeSlot(`2001:db8:0:${i.toString(16)}::/64`);
-    // Ten thousand distinct callers, a cap of a hundred: the map cannot have
-    // kept them all, and the limiter still answers.
+    // Ten thousand distinct callers against a cap of a hundred. The map cannot
+    // have kept them all, the process is still standing, and the caller who
+    // arrived first still has the count they started with.
     expect(takeSlot("2001:db8:0:0::/64").ok).toBe(true);
   });
 });

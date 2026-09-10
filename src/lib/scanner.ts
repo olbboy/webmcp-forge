@@ -13,6 +13,7 @@ import {
 import { extractSnapshotInPage } from "./extract";
 import { proposeTools } from "./heuristics";
 import {
+  SCAN_BLOCKED_MESSAGE,
   ScanBlockedError,
   assertScannableIp,
   assertScannableUrl,
@@ -61,6 +62,22 @@ function scheduleIdleShutdown(): void {
   idleTimer.unref?.();
 }
 
+/**
+ * How long to wait for a browser before giving up on it.
+ *
+ * Launching one, or connecting to one over CDP, has no timeout of its own, and
+ * it is the only wait on the scan path that does not. A hang here used to mean
+ * the request waited forever and the concurrency slot it held never came back.
+ */
+const BROWSER_ACQUIRE_TIMEOUT_MS = 20_000;
+
+function browserAcquireTimeoutMs(): number {
+  const configured = Number(process.env.BROWSER_ACQUIRE_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : BROWSER_ACQUIRE_TIMEOUT_MS;
+}
+
 export async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
     browserPromise = launchBrowser().catch((err) => {
@@ -68,7 +85,33 @@ export async function getBrowser(): Promise<Browser> {
       throw err;
     });
   }
-  return browserPromise;
+  const pending = browserPromise;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      pending,
+      new Promise<never>((_, reject) => {
+        const limit = browserAcquireTimeoutMs();
+        timer = setTimeout(
+          () => reject(new Error(`No browser available after ${limit}ms`)),
+          limit
+        );
+        timer.unref?.();
+      }),
+    ]);
+  } catch (err) {
+    // The next scan should try again rather than join a wait that has already
+    // proved itself. If the browser does turn up later, close it: nobody is
+    // holding the handle any more.
+    if (browserPromise === pending) browserPromise = null;
+    void pending.then(
+      (browser) => browser.close().catch(() => {}),
+      () => {}
+    );
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export async function closeBrowser(): Promise<void> {
@@ -229,8 +272,18 @@ async function runScan(
           continue;
         }
         visited.add(key);
-        const snap = await visitPage(context, href, deadline, options?.selfOrigin);
-        pages.push(snap);
+        try {
+          pages.push(
+            await visitPage(context, href, deadline, options?.selfOrigin)
+          );
+        } catch (err) {
+          if (!(err instanceof ScanBlockedError)) throw err;
+          // A linked page that redirects somewhere it should not is one page
+          // lost, not a lost scan. The home page is different: nothing was read
+          // there, so there is nothing to return and the refusal has to reach
+          // the caller.
+          pages.push(blockedSnapshot(href));
+        }
       }
     }
   } finally {
@@ -340,6 +393,23 @@ async function visitPage(
   } finally {
     await page.close();
   }
+}
+
+/** A page that was refused: recorded, empty, and carrying no detail about why. */
+function blockedSnapshot(href: string): PageSnapshot {
+  return {
+    url: href,
+    title: "",
+    headings: [],
+    navLinks: [],
+    links: [],
+    forms: [],
+    buttons: [],
+    searchInputs: [],
+    products: [],
+    filters: [],
+    error: SCAN_BLOCKED_MESSAGE,
+  };
 }
 
 function normalizeVisit(href: string): string {

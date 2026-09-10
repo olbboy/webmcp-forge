@@ -31,7 +31,12 @@ const maxPerDay = () => envInt("SCAN_RATE_MAX_PER_DAY", 20);
  */
 const maxUnknownPerDay = () => envInt("SCAN_RATE_UNKNOWN_PER_DAY", 200);
 const maxConcurrent = () => envInt("SCAN_MAX_CONCURRENT", 1);
-const mapMax = () => envInt("SCAN_RATE_MAP_MAX", 5_000);
+/**
+ * How many distinct callers each counter map will hold. Roomy on purpose: it is
+ * a memory ceiling, not a policy, and the policy above refuses rather than
+ * evicts once it is reached.
+ */
+const mapMax = () => envInt("SCAN_RATE_MAP_MAX", 20_000);
 
 export function isRateLimitDisabled(): boolean {
   return process.env.SCAN_RATE_LIMIT_DISABLED === "1";
@@ -98,23 +103,12 @@ const windowCounts = new Map<string, Counter>();
 const dayCounts = new Map<string, Counter>();
 
 /**
- * Keeps a map from growing without bound.
- *
- * Dropping only expired entries is not enough on its own: a day bucket lives
- * for twenty-four hours, so a caller cycling through addresses adds entries
- * far faster than any of them age out. Past the cap the oldest go regardless,
- * which costs a little accuracy and cannot cost the process its memory.
+ * Drops entries whose window has already passed. Free to do and enough on its
+ * own most of the time: a thirty-second bucket clears itself constantly.
  */
-function prune(map: Map<string, Counter>, now: number): void {
-  if (map.size <= mapMax()) return;
+function dropExpired(map: Map<string, Counter>, now: number): void {
   for (const [key, counter] of map) {
     if (counter.resetAt <= now) map.delete(key);
-  }
-  // Map iterates in insertion order, so the front of it is the oldest.
-  while (map.size > mapMax()) {
-    const oldest = map.keys().next();
-    if (oldest.done) break;
-    map.delete(oldest.value);
   }
 }
 
@@ -126,18 +120,36 @@ function bump(
   limit: number
 ): { ok: true } | { ok: false; retryAfterSeconds: number } {
   const existing = map.get(key);
-  if (!existing || existing.resetAt <= now) {
-    prune(map, now);
-    map.set(key, { count: 1, resetAt: now + ttlMs });
+  if (existing && existing.resetAt > now) {
+    if (existing.count >= limit) {
+      return {
+        ok: false,
+        retryAfterSeconds: Math.max(
+          1,
+          Math.ceil((existing.resetAt - now) / 1000)
+        ),
+      };
+    }
+    existing.count += 1;
     return { ok: true };
   }
-  if (existing.count >= limit) {
-    return {
-      ok: false,
-      retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)),
-    };
+
+  dropExpired(map, now);
+  // Full of counters that are all still live. Making room would mean deleting
+  // one, and deleting one is how a caller clears their own count: reach the
+  // daily ceiling, then send traffic from five thousand fresh addresses until
+  // the entry counting your scans is the one evicted. Refusing instead makes
+  // that pointless — the flood locks the flooder out along with everyone else,
+  // and a day bucket holds for a day.
+  //
+  // The cost is real and deliberate: past this many distinct callers in one
+  // day, a new caller waits. On a service where a busy day is dozens, that
+  // ceiling is somewhere a flood can reach and ordinary use cannot.
+  if (map.size >= mapMax()) {
+    return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil(ttlMs / 1000)) };
   }
-  existing.count += 1;
+
+  map.set(key, { count: 1, resetAt: now + ttlMs });
   return { ok: true };
 }
 

@@ -216,6 +216,47 @@ claims to be read-only can do whatever it likes. So they are labelling, not
 enforcement, and every gate that actually stops something lives in the embed's
 own code.
 
+## A full counter map refuses rather than evicts
+
+The per-address counters live in a bounded map, and something has to give when
+it fills. Evicting the oldest entry turned out to be a way to clear your own
+daily count: reach the ceiling, then send traffic from enough fresh addresses
+that the entry counting your scans is the one thrown out. Least-recently-used
+does not help either — the flooder simply stops touching their own key while
+the flood runs.
+
+So a map full of live counters refuses the new key instead of making room.
+Expired entries are still dropped for free, and the ceiling is set high enough
+that ordinary use never approaches it.
+
+The cost is deliberate: past that many distinct callers within one window, a new
+caller waits. On a service where a busy day is dozens of scans, that is
+somewhere a flood can reach and real traffic cannot, and the alternative is a
+daily limit that anyone can reset.
+
+## A slot belongs to the scan, not to the request
+
+The concurrency slot used to be released when the request stopped waiting. Those
+are not the same moment: past the hard timeout the caller gets an answer while
+the scan carries on with a browser open. Handing the slot back there advertises
+capacity that does not exist.
+
+It is released when the scan itself settles now. A request that never reached
+the scan — turned away on its address allowance — still releases on the way out,
+because there is no work to wait for.
+
+Acquiring a browser also has a timeout at last. Launching one, or connecting to
+one over CDP, was the only wait on the scan path with none of its own, and a
+hang there held the request and its slot until the process restarted.
+
+## One bad linked page is not a bad scan
+
+A refusal from the second guard has to reach the caller when it is the home page
+that was refused: nothing was read, so there is nothing to return. A linked page
+is different. The pages already gathered are worth returning, and the scan
+records the refused one as an error and carries on — which is what it does for
+any other page that fails to load.
+
 ## Things deliberately not done
 
 | Not done | Why |
