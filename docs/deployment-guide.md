@@ -69,6 +69,36 @@ docker compose --profile lightpanda up -d --build
 
 Jobs live in `./data`, a bind mount, and survive both.
 
+## Backups
+
+`scripts/backup-jobs.sh` runs from root's crontab at 18:00 UTC, which is 01:00
+in Saigon:
+
+```
+0 18 * * * /opt/webmcp-forge/scripts/backup-jobs.sh >> /var/log/webmcp-forge-backup.log 2>&1
+```
+
+Archives land in `/backups/webmcp-forge`, newest fourteen kept. That path is
+outside the checkout on purpose: a deploy runs `git reset --hard`, and backups
+should not be within reach of it.
+
+Each archive is unpacked and every job parsed before it counts as a backup,
+because job saves are not atomic and `tar` reports success over a truncated
+file. A run that fails verification retries once, then exits non-zero leaving
+no new archive. It builds under a scratch name and renames only on success, so
+a failed run cannot damage the archives already held.
+
+Restoring, with the app stopped so it does not write underneath the copy:
+
+```bash
+docker compose stop app
+tar -xzf /backups/webmcp-forge/jobs-<timestamp>.tar.gz -C /tmp
+cp /tmp/jobs/*.json /opt/webmcp-forge/data/jobs/
+docker compose start app
+```
+
+Check `/var/log/webmcp-forge-backup.log` after any change to the job store.
+
 ## Cloudflare resources
 
 Creating them again from scratch:
@@ -133,6 +163,6 @@ Chrome costs roughly 350 MB during a scan; Lightpanda about 20 MB. On a shared
 
 ## Not done yet
 
-- `data/jobs` has no scheduled backup. A lost droplet is lost jobs.
+- Job saves are a plain write, not a temp file and a rename. A crash mid-save can leave a truncated job on disk. The backup detects this rather than preventing it.
 - `ufw` is inactive. Nothing here opens a port, so this is unchanged rather
   than made worse.
