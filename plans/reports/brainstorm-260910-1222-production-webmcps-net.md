@@ -2,7 +2,7 @@
 type: brainstorm
 date: 2026-09-10
 slug: production-webmcps-net
-status: blocked on 1 decision (nơi chạy app Forge)
+status: phần CDN đã live; còn chờ quyết định nơi chạy app Forge
 ---
 
 # Brainstorm: đưa WebMCP Forge lên production tại webmcps.net
@@ -87,3 +87,39 @@ Tôi sẽ không đụng vào apex khi chưa có xác nhận riêng.
 - Workers Logs có che header `Authorization` không (tồn từ P0). Ảnh hưởng: publish token nằm trong log Cloudflare. Cần chốt trước khi phục vụ khách thật, hoặc tắt observability.
 - Job store là file trên đĩa: nếu host app không có volume bền, mọi job mất khi restart. Ảnh hưởng trực tiếp tới acceptance cuối cùng.
 - Ngân sách hàng tháng cho host app: chưa nêu.
+
+---
+
+## Đã dựng thật (10/9/2026, quyết định 2b + 3a)
+
+| Tài nguyên | Giá trị |
+|---|---|
+| KV namespace | `webmcp-forge-cdn-EMBEDS`, id `1cf2b3f500f44d76be68bc177a1d88ac` |
+| Worker | `webmcp-forge-cdn` |
+| Secret | `PUBLISH_TOKEN` đã đặt (32 byte ngẫu nhiên, hex) |
+| Hostname | `https://cdn.webmcps.net` + `https://webmcp-forge-cdn.minhdatplus.workers.dev` |
+| DNS | AAAA `cdn.webmcps.net` proxied, Cloudflare tự tạo |
+| Chứng chỉ | Cloudflare tự cấp, HTTP/2 hoạt động |
+| `preview_urls` | **tắt** — preview URL giữ phiên bản Worker cũ sống kèm secret hiện tại |
+| Apex `webmcps.net` | **không đụng**, giữ nguyên 2 record A cũ |
+
+Smoke test trên production, đã dọn dữ liệu thử (KV rỗng lại):
+
+| Kiểm | Kết quả |
+|---|---|
+| PUT không token | 401 |
+| PUT có token | 200 |
+| GET công khai | 200, ETag `"1"`, `max-age=300, stale-while-revalidate=60`, CORS, nosniff |
+| PUT version lùi | 409 |
+| DELETE rồi GET | 204 rồi 404 |
+| publicId sai định dạng | 404 |
+
+Giá trị cho nơi chạy app nằm ở `.env.production.local` (gitignored): `CDN_BASE_URL` và `CDN_PUBLISH_TOKEN`. Bản sao token trong thư mục tạm đã xoá.
+
+Nhánh `chore/cloudflare-production`, commit `88496ce`, **chưa merge**.
+
+## Trả lời 3 câu hỏi kiến trúc
+
+1. **Cloudflare Pages:** không. Pages Functions chạy trên đúng runtime Workers, cùng ràng buộc.
+2. **Cloudflare Worker cho app:** không, trừ khi viết lại. Hai chỗ chặn đã dẫn ở trên.
+3. **Mỗi website khách một Worker riêng:** không, và không nên. Một Worker phục vụ tất cả, mỗi khách là một key KV. Docs Cloudflare: **100 Worker/account gói Free, 500 gói trả phí** — mô hình một-Worker-một-khách chạm trần ở khách thứ 100.
