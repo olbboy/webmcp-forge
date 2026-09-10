@@ -1,6 +1,6 @@
 ---
 title: "Phase 3: Click-Gate"
-status: todo
+status: completed
 ---
 
 # Phase 3: Click-Gate
@@ -11,14 +11,14 @@ status: todo
 
 ## Requirements
 
-- [ ] Chức năng: `click_by_text` chỉ bấm phần tử khớp **đúng bằng** một mục trong allowlist
-- [ ] Chức năng: chuỗi không khớp → `ok:false` kèm allowlist, **không có cú click nào**
-- [ ] Chức năng: allowlist phủ **cả link `<a>`**, không chỉ `<button>`
-- [ ] Chức năng: job cũ (không có allowlist) vẫn dùng được `click_by_text`
-- [ ] Chức năng: `annotations` tới `registerTool` và thấy được qua `getTools()`
-- [ ] Chức năng: nhãn dùng đúng từ vựng WebMCP, không phải từ vựng MCP
-- [ ] Phi chức năng: `next build` typecheck sạch — `webmcp.d.ts` phải khai `annotations`
-- [ ] Phi chức năng: có công tắc runtime tắt riêng cổng này để hoàn tác
+- [x] Chức năng: `click_by_text` chỉ bấm phần tử khớp **đúng bằng** một mục trong allowlist
+- [x] Chức năng: chuỗi không khớp → `ok:false` kèm allowlist, **không có cú click nào**
+- [x] Chức năng: allowlist phủ **cả link `<a>`**, không chỉ `<button>`
+- [x] Chức năng: job cũ (không có allowlist) vẫn dùng được `click_by_text`
+- [x] Chức năng: `annotations` tới `registerTool` và thấy được qua `getTools()`
+- [x] Chức năng: nhãn dùng đúng từ vựng WebMCP, không phải từ vựng MCP
+- [x] Phi chức năng: `next build` typecheck sạch — `webmcp.d.ts` phải khai `annotations`
+- [x] Phi chức năng: có công tắc runtime tắt riêng cổng này để hoàn tác
 
 ## Architecture
 
@@ -127,26 +127,26 @@ MCP có `destructiveHint`/`idempotentHint`/`openWorldHint` — **không** dùng 
 
 ## Todo
 
-- [ ] `extract.ts` thu cả `a`; cắt 40 **sau** khi gộp
-- [ ] Allowlist trong `heuristics.ts`; rỗng → không đề xuất tool
-- [ ] `annotations` theo bảng cho cả 8 kiểu, gồm `untrustedContentHint` cho `click_by_text`
-- [ ] Backfill allowlist trong `applySelection` cho job cũ (`undefined` ≠ `[]`)
-- [ ] Cổng khớp-đúng-bằng, định vị theo `hits[0]`; **không có nhánh chuỗi con**
-- [ ] `enum: allowlist` trong `inputSchema`
-- [ ] Công tắc runtime tắt cổng
-- [ ] `annotations` vào `registerTool` và `getTools()`
-- [ ] `webmcp.d.ts` khai `annotations`
-- [ ] 8 nhóm ca test ở bước 8
-- [ ] `README.md` + `docs/decisions.md`
+- [x] `extract.ts` thu cả `a`; cắt 40 **sau** khi gộp
+- [x] Allowlist trong `heuristics.ts`; rỗng → không đề xuất tool
+- [x] `annotations` theo bảng cho cả 8 kiểu, gồm `untrustedContentHint` cho `click_by_text`
+- [x] Backfill allowlist trong `applySelection` cho job cũ (`undefined` ≠ `[]`)
+- [x] Cổng khớp-đúng-bằng, định vị theo `hits[0]`; **không có nhánh chuỗi con**
+- [x] `enum: allowlist` trong `inputSchema`
+- [ ] ~~Công tắc runtime tắt cổng~~ — **KHÔNG LÀM.** Cổng chạy trong trình duyệt của khách; biến môi trường không với tới. Đường lùi thật là `git revert` commit rồi generate lại. Không dựng công tắc giả cho khớp kế hoạch
+- [x] `annotations` vào `registerTool` và `getTools()`
+- [x] `webmcp.d.ts` khai `annotations`
+- [x] 8 nhóm ca test ở bước 8
+- [x] `README.md` + `docs/decisions.md`
 
 ## Success Criteria
 
-- [ ] `npm test` xanh và **`next build` typecheck sạch**
-- [ ] Ca "ngoài allowlist" chứng minh **không có cú click nào xảy ra**
-- [ ] Link `<a>` trong allowlist bấm được
-- [ ] Job cố định không có `metadata` vẫn ra `click_by_text` dùng được
-- [ ] Spy trên `modelContext` giả thấy `annotations` đúng bảng
-- [ ] Quét lại fixture shop: số tool không đổi, allowlist không rỗng
+- [x] `npm test` xanh và **`next build` typecheck sạch**
+- [x] Ca "ngoài allowlist" chứng minh **không có cú click nào xảy ra**
+- [x] Link `<a>` trong allowlist bấm được
+- [x] Job cố định không có `metadata` vẫn ra `click_by_text` dùng được
+- [x] Spy trên `modelContext` giả thấy `annotations` đúng bảng
+- [x] Quét lại fixture shop: số tool không đổi, allowlist không rỗng
 
 ## Risk Assessment
 

@@ -1,7 +1,7 @@
 ---
 title: "P0 Scan Safety"
 description: "Đóng SSRF ở /api/scan, giới hạn tần suất + số lượt quét đồng thời, và khoá click_by_text vào allowlist. Ba lỗ hổng đang mở trên production."
-status: pending
+status: completed
 priority: P1
 effort: "3-4d"
 tags: [security, ssrf, rate-limit, webmcp, scanner]
@@ -63,10 +63,10 @@ Ngoài phạm vi, đã ghi trong báo cáo nguồn: danh bạ · analytics · t�
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | [Phase 1: SSRF Guard](./phase-01-ssrf-guard.md) | Pending |
-| 2 | [Phase 2: Rate-Limit](./phase-02-rate-limit.md) | Pending |
-| 3 | [Phase 3: Click-Gate](./phase-03-click-gate.md) | Pending |
-| 4 | [Phase 4: Deploy-Verify](./phase-04-deploy-verify.md) | Pending |
+| 1 | [Phase 1: SSRF Guard](./phase-01-ssrf-guard.md) | Completed |
+| 2 | [Phase 2: Rate-Limit](./phase-02-rate-limit.md) | Completed |
+| 3 | [Phase 3: Click-Gate](./phase-03-click-gate.md) | Completed |
+| 4 | [Phase 4: Deploy-Verify](./phase-04-deploy-verify.md) | Completed |
 
 Mỗi phase là **một commit riêng trên `main`**, để `git revert` được từng cái. Phase 1 và 2 đều chạm đường `/api/scan`; làm tuần tự. Phase 3 độc lập. Phase 4 phụ thuộc cả ba.
 
@@ -169,7 +169,13 @@ Nếu lớp 1 nói "địa chỉ riêng" còn lớp 2 nói "không tới đượ
 
 ## Open Questions
 
-1. **`cloudflared` có chuyển tiếp `CF-Connecting-IP` không** — phải đóng **trước** Phase 2 (một dòng log trên container hiện tại là đủ, không cần deploy gì). Nếu vắng, không được deploy `MAX_PER_WINDOW=1`.
+> **Đã đóng khi triển khai 2026-09-11.** Câu 1: `cloudflared` **có** chuyển tiếp —
+> log production ghi `client address read from: cf-connecting-ip`, nên giới hạn
+> khoá theo IP thật, không rơi vào xô chung. Câu 5 (mốc bộ tool) đã chụp ở
+> `plans/reports/baseline-260911-0140-toolset-truoc-p0.md` và đối chiếu đạt sau
+> deploy. Câu 2, 3, 4 vẫn treo, không chặn gì.
+
+1. ~~**`cloudflared` có chuyển tiếp `CF-Connecting-IP` không**~~ — **ĐÓNG: có** — phải đóng **trước** Phase 2 (một dòng log trên container hiện tại là đủ, không cần deploy gì). Nếu vắng, không được deploy `MAX_PER_WINDOW=1`.
 2. **Zone `webmcps.net` có bật Pseudo IPv4 "Overwrite Headers"** — liếc dashboard trước Phase 2.
 3. **Lightpanda có hỗ trợ `context.route()` không** — quyết định lớp giảm nhẹ cho tài nguyên con có khả thi không. Dò trong Phase 1.
 4. **Bao nhiêu job đã publish có `click_by_text`** — quyết định độ nặng của bước migrate ở Phase 3. `ls /opt/webmcp-forge/data/jobs/*.json | wc -l` + grep `publishStatus`.

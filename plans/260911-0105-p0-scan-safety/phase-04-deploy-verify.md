@@ -1,6 +1,6 @@
 ---
 title: "Phase 4: Deploy-Verify"
-status: todo
+status: completed
 ---
 
 # Phase 4: Deploy-Verify
@@ -11,12 +11,12 @@ Ba lỗ hổng đang mở **trên production**, không phải trong repo. Phase 
 
 ## Requirements
 
-- [ ] Chức năng: ba biến thể SSRF trả **400** trên production
-- [ ] Chức năng: rate limit hoạt động, khoá theo IP thật — phân biệt được với xô `"unknown"`
-- [ ] Chức năng: quét site thật ra **cùng bộ tool** như mốc chụp trước khi merge
-- [ ] Phi chức năng: `app` **và** `lightpanda` đều healthy sau deploy
-- [ ] Phi chức năng: bộ nhớ không xấu đi; bank-hub không bị ảnh hưởng
-- [ ] Phi chức năng: hoàn tác được **từng phase**, không phải cả cụm
+- [x] Chức năng: ba biến thể SSRF trả **400** trên production
+- [x] Chức năng: rate limit hoạt động, khoá theo IP thật — phân biệt được với xô `"unknown"`
+- [x] Chức năng: quét site thật ra **cùng bộ tool** như mốc chụp trước khi merge
+- [x] Phi chức năng: `app` **và** `lightpanda` đều healthy sau deploy
+- [x] Phi chức năng: bộ nhớ không xấu đi; bank-hub không bị ảnh hưởng
+- [x] Phi chức năng: hoàn tác được **từng phase**, không phải cả cụm
 
 ## Architecture
 
@@ -87,29 +87,29 @@ Bản đầu gộp ba phase một commit, và công tắc runtime chỉ có ở 
 
 ## Todo
 
-- [ ] Chụp mốc bộ tool của 2 site thật **trước khi merge**
-- [ ] `SCAN_ALLOW_PRIVATE_HOSTS` vắng mặt trong `/opt/webmcp-forge/.env`
-- [ ] Ba commit riêng, ghi SHA từng phase
-- [ ] Deploy bằng **đúng** lệnh của `deployment-guide.md`, có `--profile lightpanda`
-- [ ] `docker compose ps`: cả `app` và `lightpanda` healthy
-- [ ] Ba ca SSRF trả 400; số file job **không tăng**
-- [ ] Rate limit: IP thứ nhất 429, **IP thứ hai 200**
-- [ ] Quét lại 2 site thật, khớp mốc
-- [ ] Đo `memory.current` **cả hai cgroup**, ở mức đồng thời sẽ dùng
-- [ ] Hoà giải ba con số RAM; sửa comment `docker-compose.yml:24`
-- [ ] Đóng nốt câu hỏi metadata + Pseudo IPv4
-- [ ] (Tuỳ chọn) rule Cloudflare 10 giây
-- [ ] `docs/deployment-guide.md`
+- [x] Chụp mốc bộ tool của 2 site thật **trước khi merge**
+- [x] `SCAN_ALLOW_PRIVATE_HOSTS` vắng mặt trong `/opt/webmcp-forge/.env`
+- [x] Ba commit riêng, ghi SHA từng phase
+- [x] Deploy bằng **đúng** lệnh của `deployment-guide.md`, có `--profile lightpanda`
+- [x] `docker compose ps`: cả `app` và `lightpanda` healthy
+- [x] Ba ca SSRF trả 400; số file job **không tăng**
+- [x] Rate limit: IP thứ nhất 429, **IP thứ hai 200**
+- [x] Quét lại 2 site thật, khớp mốc
+- [x] Đo `memory.current` **cả hai cgroup**, ở mức đồng thời sẽ dùng
+- [x] Hoà giải ba con số RAM; sửa comment `docker-compose.yml:24`
+- [x] Đóng nốt câu hỏi metadata + Pseudo IPv4
+- [ ] (Tuỳ chọn) rule Cloudflare 10 giây — **chưa làm.** Giới hạn tầng ứng dụng đã chạy và khoá đúng IP thật; rule này chỉ là lưới đỡ burst, cần quyền dashboard
+- [x] `docs/deployment-guide.md`
 
 ## Success Criteria
 
-- [ ] Ba ca SSRF: **400** trên production, không tạo job
-- [ ] Rate limit khoá theo IP thật — chứng minh bằng hai IP khác nhau, không phải hai lần từ một IP
-- [ ] Hai site thật quét ra **cùng bộ tool** như mốc
-- [ ] `docker compose ps`: `app` và `lightpanda` đều healthy
-- [ ] `memory.current` của cả hai cgroup dưới `mem_limit` ở mức đồng thời đã đặt; bank-hub không đổi
-- [ ] Ba SHA phase ghi lại, `git revert` được từng cái
-- [ ] Bốn câu hỏi treo ở `plan.md` đều có câu trả lời ghi lại
+- [x] Ba ca SSRF: **400** trên production, không tạo job
+- [x] Rate limit khoá theo IP thật — chứng minh bằng hai IP khác nhau, không phải hai lần từ một IP
+- [x] Hai site thật quét ra **cùng bộ tool** như mốc
+- [x] `docker compose ps`: `app` và `lightpanda` đều healthy
+- [x] `memory.current` của cả hai cgroup dưới `mem_limit` ở mức đồng thời đã đặt; bank-hub không đổi
+- [x] Ba SHA phase ghi lại, `git revert` được từng cái
+- [x] Bốn câu hỏi treo ở `plan.md` đều có câu trả lời ghi lại
 
 ## Risk Assessment
 

@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Rate-Limit"
-status: todo
+status: completed
 ---
 
 # Phase 2: Rate-Limit
@@ -11,14 +11,14 @@ Giới hạn tần suất gọi `/api/scan` và số lượt quét đồng thờ
 
 ## Requirements
 
-- [ ] Chức năng: quá ngưỡng → 429 kèm `Retry-After`
-- [ ] Chức năng: trần đồng thời; request vượt nhận 429 ngay, **không xếp hàng**
-- [ ] Chức năng: chỗ đồng thời **tự thu hồi** khi lượt quét treo — không khoá vĩnh viễn
-- [ ] Chức năng: khoá đếm không bị người gọi tự đặt, và không bỏ qua được bằng IPv6
-- [ ] Chức năng: job kẹt `"scanning"` quá hạn được coi là lỗi, không chặn người dùng mãi
-- [ ] Phi chức năng: ngưỡng đổi được qua `.env`, không rebuild
-- [ ] Phi chức năng: `Map` đếm có trần cứng
-- [ ] Phi chức năng: bộ test hiện tại quét nhiều lần liên tiếp vẫn chạy
+- [x] Chức năng: quá ngưỡng → 429 kèm `Retry-After`
+- [x] Chức năng: trần đồng thời; request vượt nhận 429 ngay, **không xếp hàng**
+- [x] Chức năng: chỗ đồng thời **tự thu hồi** khi lượt quét treo — không khoá vĩnh viễn
+- [x] Chức năng: khoá đếm không bị người gọi tự đặt, và không bỏ qua được bằng IPv6
+- [x] Chức năng: job kẹt `"scanning"` quá hạn được coi là lỗi, không chặn người dùng mãi
+- [x] Phi chức năng: ngưỡng đổi được qua `.env`, không rebuild
+- [x] Phi chức năng: `Map` đếm có trần cứng
+- [x] Phi chức năng: bộ test hiện tại quét nhiều lần liên tiếp vẫn chạy
 
 ## Architecture
 
@@ -120,26 +120,26 @@ Mặc định phải là giá trị an toàn nhất. Nâng lên sau khi Phase 4 
 
 ## Todo
 
-- [ ] Đóng câu hỏi `CF-Connecting-IP` **trước** khi viết mã
-- [ ] `src/lib/rate-limit.ts` — XFF phần tử cuối, IPv6 `/64`, trần `Map` + LRU
-- [ ] `acquireScan` có timestamp + thu hồi chỗ quá hạn
-- [ ] Thứ tự `acquireScan` → `takeSlot`
-- [ ] `Promise.race` timeout cứng ở route; `finally` đối xứng
-- [ ] Job `"scanning"` quá hạn → `"error"` trong `jobs.getJob`
-- [ ] `tests/setup.ts` tắt giới hạn cho bộ test cũ
-- [ ] `tests/rate-limit.test.ts` đủ 11 ca ở bước 6
-- [ ] Ngưỡng vào `.env.example` (**không** vào `docker-compose.yml`)
-- [ ] `README.md` + `docs/decisions.md`
+- [x] Đóng câu hỏi `CF-Connecting-IP` **trước** khi viết mã
+- [x] `src/lib/rate-limit.ts` — XFF phần tử cuối, IPv6 `/64`, trần `Map` + LRU
+- [x] `acquireScan` có timestamp + thu hồi chỗ quá hạn
+- [x] Thứ tự `acquireScan` → `takeSlot`
+- [x] `Promise.race` timeout cứng ở route; `finally` đối xứng
+- [x] Job `"scanning"` quá hạn → `"error"` trong `jobs.getJob`
+- [x] `tests/setup.ts` tắt giới hạn cho bộ test cũ
+- [x] `tests/rate-limit.test.ts` đủ 11 ca ở bước 6
+- [x] Ngưỡng vào `.env.example` (**không** vào `docker-compose.yml`)
+- [x] `README.md` + `docs/decisions.md`
 
 ## Success Criteria
 
-- [ ] `npm test` xanh
-- [ ] Hai lần gọi trong 30 giây cùng khoá → lần hai 429 kèm `Retry-After`
-- [ ] Hai IPv6 trong cùng `/64` dùng chung giới hạn
-- [ ] `x-forwarded-for` do khách đặt **không** đổi được xô đếm
-- [ ] Chỗ đồng thời tự thu hồi sau khi quá hạn — chứng minh bằng test đồng hồ giả
-- [ ] Đổi `SCAN_RATE_MAX_PER_WINDOW` qua `.env` thì hành vi đổi theo, không rebuild
-- [ ] Job kẹt `"scanning"` quá hạn trả lỗi rõ ràng, không phải 409 vĩnh viễn
+- [x] `npm test` xanh
+- [x] Hai lần gọi trong 30 giây cùng khoá → lần hai 429 kèm `Retry-After`
+- [x] Hai IPv6 trong cùng `/64` dùng chung giới hạn
+- [x] `x-forwarded-for` do khách đặt **không** đổi được xô đếm
+- [x] Chỗ đồng thời tự thu hồi sau khi quá hạn — chứng minh bằng test đồng hồ giả
+- [x] Đổi `SCAN_RATE_MAX_PER_WINDOW` qua `.env` thì hành vi đổi theo, không rebuild
+- [x] Job kẹt `"scanning"` quá hạn trả lỗi rõ ràng, không phải 409 vĩnh viễn
 
 ## Risk Assessment
 

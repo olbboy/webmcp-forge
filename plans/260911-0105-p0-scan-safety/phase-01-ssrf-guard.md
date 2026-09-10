@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: SSRF Guard"
-status: todo
+status: completed
 ---
 
 # Phase 1: SSRF Guard
@@ -11,14 +11,14 @@ Chặn `/api/scan` mở URL trỏ tới hạ tầng nội bộ — trực tiếp
 
 ## Requirements
 
-- [ ] Chức năng: URL phân giải ra IP thuộc dải cấm bị từ chối với **HTTP 400**, và **không tạo job trên đĩa**
-- [ ] Chức năng: chuyển hướng tới IP nội bộ bị chặn, và việc chặn **thoát ra tới route**, không bị nuốt thành 200
-- [ ] Chức năng: `robots.txt` không bám redirect ra nội bộ
-- [ ] Chức năng: lớp 2 chạy đúng dưới **cả Chrome và Lightpanda**
-- [ ] Phi chức năng: 6 file test hiện tại (quét `127.0.0.1`) vẫn chạy được
-- [ ] Phi chức năng: nút "Try the demo shop" và `DEMO.md` vẫn chạy trong dev
-- [ ] Phi chức năng: một thông điệp từ chối duy nhất, không tiết lộ nội bộ có gì
-- [ ] Phi chức năng: lớp 2 có công tắc runtime để tắt riêng khi cần hoàn tác
+- [x] Chức năng: URL phân giải ra IP thuộc dải cấm bị từ chối với **HTTP 400**, và **không tạo job trên đĩa**
+- [x] Chức năng: chuyển hướng tới IP nội bộ bị chặn, và việc chặn **thoát ra tới route**, không bị nuốt thành 200
+- [x] Chức năng: `robots.txt` không bám redirect ra nội bộ
+- [x] Chức năng: lớp 2 chạy đúng dưới **cả Chrome và Lightpanda**
+- [x] Phi chức năng: 6 file test hiện tại (quét `127.0.0.1`) vẫn chạy được
+- [x] Phi chức năng: nút "Try the demo shop" và `DEMO.md` vẫn chạy trong dev
+- [x] Phi chức năng: một thông điệp từ chối duy nhất, không tiết lộ nội bộ có gì
+- [x] Phi chức năng: lớp 2 có công tắc runtime để tắt riêng khi cần hoàn tác
 
 ## Architecture
 
@@ -158,29 +158,29 @@ Kết quả nếu để nguyên: job `status:"ready"`, HTTP **200**, có tool �
 
 ## Todo
 
-- [ ] Dò `context.route()` trên Lightpanda, ghi kết quả vào `plans/reports/`
-- [ ] `src/lib/net-guard.ts` đủ 10 dải + miễn trừ origin app + công tắc lớp 2
-- [ ] Cảnh báo lúc khởi động khi `SCAN_ALLOW_PRIVATE_HOSTS` bật
-- [ ] Lớp 1 trong `jobs.runScan`, trước `saveJob(pending)`
-- [ ] `jobs.runScan` re-throw `ScanBlockedError`
-- [ ] Lớp 2 engine-aware trong `visitPage`, kiểm **mọi chặng**
-- [ ] `visitPage` re-throw `ScanBlockedError` thay vì nuốt
-- [ ] `robots.ts` `redirect:"manual"` + kiểm từng `Location`
-- [ ] Route trả 400, một thông điệp chung
-- [ ] `tests/setup.ts` bật cửa thoát
-- [ ] `tests/net-guard.test.ts`
-- [ ] `tests/ssrf.test.ts` đủ 5 ca, mỗi ca cô lập đúng lớp
-- [ ] (nếu khả thi) `context.route()` giảm nhẹ tài nguyên con
-- [ ] `docs/decisions.md` + `README.md`
+- [x] Dò `context.route()` trên Lightpanda, ghi kết quả vào `plans/reports/`
+- [x] `src/lib/net-guard.ts` đủ 10 dải + miễn trừ origin app + công tắc lớp 2
+- [x] Cảnh báo lúc khởi động khi `SCAN_ALLOW_PRIVATE_HOSTS` bật
+- [x] Lớp 1 trong `jobs.runScan`, trước `saveJob(pending)`
+- [x] `jobs.runScan` re-throw `ScanBlockedError`
+- [x] Lớp 2 engine-aware trong `visitPage`, kiểm **mọi chặng**
+- [x] `visitPage` re-throw `ScanBlockedError` thay vì nuốt
+- [x] `robots.ts` `redirect:"manual"` + kiểm từng `Location`
+- [x] Route trả 400, một thông điệp chung
+- [x] `tests/setup.ts` bật cửa thoát
+- [x] `tests/net-guard.test.ts`
+- [x] `tests/ssrf.test.ts` đủ 5 ca, mỗi ca cô lập đúng lớp
+- [ ] ~~(nếu khả thi) `context.route()` giảm nhẹ tài nguyên con~~ — **KHÔNG LÀM.** Đã dò: trên Lightpanda `route()` đăng ký và kích hoạt được, nhưng đối tượng `Route` thiếu `url()` nên không quyết định được chặn gì, và cài nó vào làm `page.goto` treo. Đúng phản ứng đã định trước: bỏ, giữ ở mục rủi ro còn lại của `plan.md`
+- [x] `docs/decisions.md` + `README.md`
 
 ## Success Criteria
 
-- [ ] `npm test` xanh; không test cũ nào bị nới lỏng
-- [ ] Ba ca SSRF trả **400** và **không tạo file job nào**
-- [ ] Ca lớp 2 **đỏ khi đặt `SCAN_ENFORCE_CONNECTED_IP=0`** — chứng minh nó test đúng lớp
-- [ ] Lớp 2 có bằng chứng đo cho **cả hai** engine, ghi trong `plans/reports/`
-- [ ] `npm run dev` → "Try the demo shop" → quét xong bình thường
-- [ ] Quét `https://blvera.com` và `https://pytesess.vn` ra **cùng bộ tool** như mốc chụp trước khi merge
+- [x] `npm test` xanh; không test cũ nào bị nới lỏng
+- [x] Ba ca SSRF trả **400** và **không tạo file job nào**
+- [x] Ca lớp 2 **đỏ khi đặt `SCAN_ENFORCE_CONNECTED_IP=0`** — chứng minh nó test đúng lớp
+- [x] Lớp 2 có bằng chứng đo cho **cả hai** engine, ghi trong `plans/reports/`
+- [x] `npm run dev` → "Try the demo shop" → quét xong bình thường
+- [x] Quét `https://blvera.com` và `https://pytesess.vn` ra **cùng bộ tool** như mốc chụp trước khi merge
 
 ## Risk Assessment
 
