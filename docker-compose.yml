@@ -62,6 +62,11 @@ services:
       - "9222"
       - --advertise-host
       - lightpanda
+      # Overriding the command drops the rest of the image's defaults, and one
+      # of them was this. The telemetry line is logged at info, so without it
+      # the check in the README has nothing to read.
+      - --log-level
+      - info
     environment:
       # Telemetry is on by default and reports to telemetry.lightpanda.io.
       # This browser opens other people's sites on their behalf, so it does not
