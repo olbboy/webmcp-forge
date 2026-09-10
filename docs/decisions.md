@@ -150,6 +150,22 @@ A redirect target never inherits the hatch. The hatch exists so this project can
 point the scanner at a fixture it runs itself; where a redirect leads is chosen
 by the site being scanned.
 
+## The scan limits are counted in this process, not in front of it
+
+Cloudflare's free plan allows one rate-limiting rule with a counting window of
+ten seconds, which stops a flood and cannot express "one scan a minute". Next.js
+16 renamed middleware to proxy and its documentation asks callers not to rely on
+shared modules or globals there, since it is meant to be deployable to a CDN. So
+the counters live in the route handler, which already declares the Node runtime.
+
+That rests on there being one process to count in. There is: the container runs
+a single `next-server`. Two instances would each count on their own and this
+would stop being a limit.
+
+The concurrency ceiling is checked before the per-address allowance. A caller
+turned away because the box is busy has not had a scan, and should not be
+charged for one.
+
 ## Things deliberately not done
 
 | Not done | Why |

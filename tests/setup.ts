@@ -11,3 +11,7 @@ process.env.SCAN_ALLOW_PRIVATE_HOSTS = "1";
 // pre-flight check off and the post-navigation check on, and prove which
 // one refused.
 process.env.SCAN_ENFORCE_CONNECTED_IP = "0";
+
+// The suite scans repeatedly and in quick succession; the limits are
+// exercised on their own in tests/rate-limit.test.ts.
+process.env.SCAN_RATE_LIMIT_DISABLED = "1";

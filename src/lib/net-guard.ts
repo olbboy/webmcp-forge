@@ -251,3 +251,22 @@ export function assertScannableIp(
   if (!options?.ignoreEscapeHatch && allowPrivateHosts()) return;
   if (!ip || isBlockedIp(ip)) throw new ScanBlockedError();
 }
+
+/**
+ * The address reduced to what a rate limiter should count.
+ *
+ * IPv4 is one address per subscriber. IPv6 is not: a home connection is
+ * routinely handed a /64, so counting whole addresses lets one visitor take a
+ * fresh bucket for every request by changing the last four groups.
+ */
+export function ipNetworkKey(raw: string): string {
+  const ip = unmapV4(raw.trim());
+  if (isIP(ip) === 4) return ip;
+  const bytes = v6ToBytes(ip);
+  if (!bytes) return ip;
+  const groups: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    groups.push(((bytes[i * 2] << 8) | bytes[i * 2 + 1]).toString(16));
+  }
+  return `${groups.join(":")}::/64`;
+}

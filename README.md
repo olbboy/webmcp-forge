@@ -133,6 +133,11 @@ redirect that lands in one. The check runs twice: once on the address given, and
 once on what the browser actually connected to. `robots.txt` follows the same
 rule, since it is fetched separately.
 
+Scans are also rate limited per client address, and only a small number run at
+once, because each one costs a browser. Over the limit the endpoint answers 429
+with `Retry-After`. The thresholds are environment variables; `.env.example`
+lists them with their defaults.
+
 The job id is an unauthenticated admin key. Anyone holding it can change or
 remove your tools, which is why it never appears in a hosted URL.
 
