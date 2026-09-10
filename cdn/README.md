@@ -73,8 +73,9 @@ test command for this folder.
 ## Operational notes
 
 - **Propagation is not instant.** KV takes up to 60 seconds to reach every
-  location and browsers hold the file for 5 minutes, so a republish or an
-  unpublish reaches visitors within roughly 6 minutes.
+  location, browsers hold the file for 5 minutes, and `stale-while-revalidate`
+  allows a further minute of stale serving, so a republish or an unpublish
+  reaches visitors within roughly 7 minutes.
 - **The version guard has a 60-second hole.** KV caches reads per location for
   60 seconds by default, and the guard reads through that same cache. A retry
   of an older publish arriving within a minute of a newer one can therefore

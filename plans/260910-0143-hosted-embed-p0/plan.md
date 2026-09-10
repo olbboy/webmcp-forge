@@ -78,7 +78,7 @@ KV lan toàn cầu tới 60 giây + cache trình duyệt 5 phút → bản mới
 |---|-------|--------|
 | 1 | [Phase 1: Worker `cdn/` + test harness](./phase-01-cdn-worker.md) | Completed |
 | 2 | [Phase 2: Forge data, client CDN, API](./phase-02-forge-data-and-api.md) | Completed |
-| 3 | [Phase 3: UI hosted / self-host panels](./phase-03-ui-panels.md) | Pending |
+| 3 | [Phase 3: UI hosted / self-host panels](./phase-03-ui-panels.md) | Completed |
 | 4 | [Phase 4: Docs, E2E, scripts](./phase-04-docs-tests-scripts.md) | Pending |
 
 Phụ thuộc: 2 → 1 · 3 → 2 · 4 → 3. Tách PR: PR1 = phase 1 · PR2 = phase 2 · PR3 = phase 3 + 4.
