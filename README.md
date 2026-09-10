@@ -86,7 +86,9 @@ after any pull:
 docker compose logs lightpanda | grep "telemetry status"
 ```
 
-It must say `disabled=true`. If it says `disabled=false`, the image has changed
+It must say `disabled=true`. The same log carries a line about advertising a
+loopback address; the compose file already answers it, and a scan failing with
+`ECONNREFUSED 127.0.0.1:9222` means that answer went missing. If it says `disabled=false`, the image has changed
 how it reads that setting; stop and check before scanning anything that is not
 yours. The upstream privacy policy says URLs and page content are never sent,
 which is why this is a check rather than a blocker.

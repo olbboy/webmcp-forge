@@ -48,6 +48,20 @@ services:
     image: lightpanda/browser:nightly
     profiles: ["lightpanda"]
     restart: unless-stopped
+    # Playwright asks /json/version where to open its WebSocket and then
+    # believes the answer. Bound to a wildcard, Lightpanda answers
+    # ws://127.0.0.1:9222, which sends the app to its own loopback where
+    # nothing listens. Advertising the service name gives the app an address
+    # that means something on the compose network.
+    command:
+      - /bin/lightpanda
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "9222"
+      - --advertise-host
+      - lightpanda
     environment:
       # Telemetry is on by default and reports to telemetry.lightpanda.io.
       # This browser opens other people's sites on their behalf, so it does not
