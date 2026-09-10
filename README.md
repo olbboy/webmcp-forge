@@ -75,7 +75,7 @@ Then set these and recreate the app:
 
 ```
 SCANNER_ENGINE=lightpanda
-SCANNER_CDP_URL=http://lightpanda:9222
+SCANNER_CDP_URL=http://127.0.0.1:9222
 ```
 
 Lightpanda reports to its makers unless told otherwise, and the compose file
