@@ -77,7 +77,7 @@ KV lan toàn cầu tới 60 giây + cache trình duyệt 5 phút → bản mới
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | [Phase 1: Worker `cdn/` + test harness](./phase-01-cdn-worker.md) | Completed |
-| 2 | [Phase 2: Forge data, client CDN, API](./phase-02-forge-data-and-api.md) | Pending |
+| 2 | [Phase 2: Forge data, client CDN, API](./phase-02-forge-data-and-api.md) | Completed |
 | 3 | [Phase 3: UI hosted / self-host panels](./phase-03-ui-panels.md) | Pending |
 | 4 | [Phase 4: Docs, E2E, scripts](./phase-04-docs-tests-scripts.md) | Pending |
 

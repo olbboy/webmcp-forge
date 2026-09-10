@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Forge data, client CDN, API"
-status: todo
+status: completed
 priority: P1
 effort: "5h"
 dependencies: [1]
@@ -14,8 +14,8 @@ Thêm `publicId`, `version`, trạng thái publish vào job; client `src/lib/cdn
 
 ## Requirements
 
-- [ ] Functional: generate luôn `status: generated`; publish best-effort với 4 trạng thái; retry không tái sinh; unpublish xoá CDN; response generate trả `publicId`, `hostedEmbedUrl`, `publishStatus`, `publishedVersion`, `version`.
-- [ ] Non-functional: `jobId` không bao giờ đi qua Worker; `publicId` không bao giờ được chấp nhận làm khoá admin; đường tái sinh lười không publish, không tăng version.
+- [x] Functional: generate luôn `status: generated`; publish best-effort với 4 trạng thái; retry không tái sinh; unpublish xoá CDN; response generate trả `publicId`, `hostedEmbedUrl`, `publishStatus`, `publishedVersion`, `version`.
+- [x] Non-functional: `jobId` không bao giờ đi qua Worker; `publicId` không bao giờ được chấp nhận làm khoá admin; đường tái sinh lười không publish, không tăng version.
 
 ## Architecture
 
@@ -77,16 +77,33 @@ GET  /api/jobs/:id/embed.js  → không đổi; lazy path dùng job.version ?? 1
 
 ## Todo
 
-- [ ] types + generator + sửa test generator
-- [ ] jobs.ts: publicId, generateAndPublish, republish, unpublish
-- [ ] cdn.ts + cdn-client.test.ts
-- [ ] 3 route + api.test.ts mở rộng
+- [x] types + generator + sửa test generator
+- [x] jobs.ts: publicId, generateAndPublish, republish, unpublish
+- [x] cdn.ts + cdn-client.test.ts
+- [x] 3 route + api.test.ts mở rộng
 
 ## Success Criteria
 
-- [ ] `npm test` xanh, gồm 5 case (a)–(e) và test client.
-- [ ] `grep -r "job_" src/lib/cdn.ts` không có kết quả; URL hosted chỉ chứa `publicId`.
-- [ ] Không có `console.log` token; `publishError` không chứa header.
+- [x] `npm test` xanh, gồm 5 case (a)–(e) và test client.
+- [x] `grep -r "job_" src/lib/cdn.ts` không có kết quả; URL hosted chỉ chứa `publicId`.
+- [x] Không có `console.log` token; `publishError` không chứa header.
+
+## As built (sai lệch so với plan, sau code review)
+
+Rủi ro "lưu job hai lần gây race" mà plan đã kê ĐÃ xảy ra thật. Reviewer chứng minh bằng `Promise.all([generate, generate])`: hai run mint hai `publicId`, đẩy hai bundle khác nội dung cùng mang version 1, và một bản nằm sống trên CDN mà job không còn nhớ id nên `unpublish` không bao giờ gỡ được. Mitigation trong plan (single-flight theo `jobId`) giờ đã implement.
+
+Thêm so với plan:
+- **`src/lib/key-queue.ts`** (mới): `createKeyQueue()` serialize theo khoá. Hai nơi dùng: `jobs.ts` khoá theo `jobId` (job store là file JSON không khoá), `cdn.ts` khoá theo `publicId` (KV chỉ nhận 1 ghi/giây/khoá). Trước đó logic này chỉ nằm trong `cdn.ts`.
+- **`publicId` được persist TRƯỚC khi gọi CDN**, không phải sau. Một publish hỏng giữa chừng vẫn có thể đã tạo record; id mà job quên là một embed không ai gỡ được.
+- **Nhánh `superseded` giờ ghi trạng thái `published`** kèm hosted URL nếu chưa run nào ghi. Trước đó nó chỉ `getJob` rồi trả về, nên khi Worker trả 409 mà không có run nội bộ nào mới hơn, job kẹt ở `failed` với `publishError` cũ trong khi CDN đang giữ bundle mới hơn.
+- **`newestRequested` giữ suốt vòng đời process**, tách khỏi hàng đợi tự dọn. Route retry có 3 lần `await` (đọc job + 2 artifact) trước khi tới `publishEmbed`; nếu quên mốc version trong khoảng đó thì một retry cũ lọt qua và revert bundle. Đổi lại một số nguyên cho mỗi publicId đã publish.
+- **`generatedAt` trở thành tham số của `buildManifest`.** Đường tái sinh lười dùng lại `job.generatedAt` nên rebuild ra đúng byte cũ. Trước đó rebuild lệch timestamp mà vẫn khai cùng version, trong khi Worker dùng chính số đó làm ETag.
+- **`JobError` + `src/lib/job-error-response.ts`** (mới) thay `errorStatus`. Lỗi không phải `JobError` giờ trả 500 kèm message chung và log ở server; trước đó một lỗi filesystem trả nguyên đường dẫn tuyệt đối cho client kèm status 400.
+- **Đường tái sinh lười không còn `saveJob`.** `buildBundle` tách khỏi `generateJobBundle`, nên một GET download không còn đổi `status`, `generatedAt`, `updatedAt` của job.
+
+Test: 33 case cho phase 2 (13 client + 14 route + 6 gốc đã sửa). Mutation test tự chạy lại 5 hành vi, tất cả đều bị bắt: bỏ re-check trong hàng đợi · lazy path bỏ qua selection đã lưu · `superseded` trả job nguyên trạng · bỏ serialize theo jobId (11 test đỏ) · lazy rebuild dùng timestamp mới.
+
+Ghi nhận, không sửa (quyết định phase 0): `POST publish`/`unpublish` không có auth. Mô hình tin cậy là "jobId = capability". Kẻ tấn công cần biết jobId mới dựng được request, mà biết rồi thì POST thẳng từ server của họ cũng được, nên CSRF không thêm khả năng gì. Blast radius có tăng: trước là ghi file local, giờ là mutate CDN đang chạy.
 
 ## Risk Assessment
 

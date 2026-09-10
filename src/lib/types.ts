@@ -120,6 +120,23 @@ export type ScanJob = {
   robotsDisallowAll?: boolean;
   error?: string;
   generatedAt?: string;
+
+  /** Bundle version, incremented on every generate. Starts at 1. */
+  version?: number;
+  /**
+   * Public CDN identity, minted on the first generate once the CDN is
+   * configured and stable for the life of the job. Deliberately not the job
+   * id: the job id is the owner's admin key, and this one is visible in the
+   * page source of every site that embeds the bundle.
+   */
+  publicId?: string;
+  publishStatus?: "skipped" | "published" | "failed" | "unpublished";
+  /** Version currently on the CDN, which lags `version` after a failure. */
+  publishedVersion?: number;
+  publishedAt?: string;
+  publishError?: string;
+  hostedEmbedUrl?: string;
+  hostedManifestUrl?: string;
 };
 
 export type EmbedManifest = {

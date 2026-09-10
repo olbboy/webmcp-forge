@@ -31,7 +31,7 @@ describe("generated embed.js registers and executes tools", () => {
         candidates: scan.candidates,
         includeLocalRelay: false,
       };
-      const js = generateEmbedJs(buildManifest(job, selected, false));
+      const js = generateEmbedJs(buildManifest(job, selected, false, 1, new Date().toISOString()));
       expect(js).toContain("document.modelContext");
       expect(js).toContain("navigator.modelContext");
       expect(js).toContain("[WebMCP Forge] registered:");

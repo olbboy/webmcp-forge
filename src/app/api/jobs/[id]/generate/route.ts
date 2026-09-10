@@ -1,4 +1,5 @@
-import { generateJobBundle } from "@/lib/jobs";
+import { jobErrorResponse } from "@/lib/job-error-response";
+import { generateAndPublish, publishSummary } from "@/lib/jobs";
 import type { SelectedTool } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -21,22 +22,21 @@ export async function POST(
   }
 
   try {
-    const { job } = await generateJobBundle(
+    // Publishing is attempted here but never gates the response: a CDN outage
+    // leaves the owner with a working self-host download and a retry button.
+    const job = await generateAndPublish(
       id,
       body.tools,
       Boolean(body.includeLocalRelay)
     );
     return Response.json({
-      id: job.id,
-      status: job.status,
+      ...publishSummary(job),
       includeLocalRelay: job.includeLocalRelay,
       embedJs: `/api/jobs/${id}/embed.js`,
       manifest: `/api/jobs/${id}/manifest.json`,
       toolCount: job.selected?.filter((t) => t.enabled !== false).length,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Generate failed";
-    const status = message === "Job not found" ? 404 : 400;
-    return Response.json({ error: message }, { status });
+    return jobErrorResponse(err);
   }
 }
