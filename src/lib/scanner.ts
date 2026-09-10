@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Page } from "playwright";
+import { chromium, type Browser, type Page, type Response } from "playwright";
 import {
   BROWSER_IDLE_MS,
   DEFAULT_SCANNER_CDP_URL,
@@ -13,11 +13,18 @@ import {
 import { extractSnapshotInPage } from "./extract";
 import { proposeTools } from "./heuristics";
 import {
+  ScanBlockedError,
+  assertScannableIp,
+  assertScannableUrl,
+  enforceConnectedIp,
+  isSameOrigin,
+} from "./net-guard";
+import {
   fetchRobotsTxt,
   pathAllowedByRobots,
   robotsDisallowsAll,
 } from "./robots";
-import type { PageSnapshot, ScanJob, ToolCandidate } from "./types";
+import type { PageSnapshot, ToolCandidate } from "./types";
 
 let browserPromise: Promise<Browser> | null = null;
 /** Scans in flight. The browser is only a candidate for shutdown at zero. */
@@ -169,7 +176,7 @@ type ScanResult = {
  */
 export async function scanSite(
   rawUrl: string,
-  options?: { maxPages?: number; timeoutMs?: number }
+  options?: { maxPages?: number; timeoutMs?: number; selfOrigin?: string }
 ): Promise<ScanResult> {
   activeScans += 1;
   cancelIdleShutdown();
@@ -183,7 +190,7 @@ export async function scanSite(
 
 async function runScan(
   rawUrl: string,
-  options?: { maxPages?: number; timeoutMs?: number }
+  options?: { maxPages?: number; timeoutMs?: number; selfOrigin?: string }
 ): Promise<ScanResult> {
   const startUrl = parseScanUrl(rawUrl);
   const origin = startUrl.origin;
@@ -207,7 +214,7 @@ async function runScan(
   const visited = new Set<string>();
 
   try {
-    const home = await visitPage(context, startUrl.href, deadline);
+    const home = await visitPage(context, startUrl.href, deadline, options?.selfOrigin);
     pages.push(home);
     visited.add(normalizeVisit(startUrl.href));
 
@@ -222,7 +229,7 @@ async function runScan(
           continue;
         }
         visited.add(key);
-        const snap = await visitPage(context, href, deadline);
+        const snap = await visitPage(context, href, deadline, options?.selfOrigin);
         pages.push(snap);
       }
     }
@@ -240,33 +247,83 @@ async function runScan(
   };
 }
 
-export async function createScanJob(rawUrl: string): Promise<Omit<ScanJob, "id" | "createdAt" | "updatedAt" | "status" | "includeLocalRelay">> {
-  const result = await scanSite(rawUrl);
-  return {
-    url: result.url,
-    origin: result.origin,
-    pages: result.pages,
-    candidates: result.candidates,
-    robotsDisallowAll: result.robotsDisallowAll,
-  };
+
+/**
+ * The second check: what the browser actually connected to, after it followed
+ * whatever redirects it was given.
+ *
+ * The strong form reads the peer address off the response, which is ground
+ * truth — it closes both redirects and DNS rebinding, because it reports the
+ * address that was dialled rather than one this process resolved. Lightpanda
+ * does not report it (measured: `serverAddr()` returns null there), so that
+ * engine gets the weaker form: re-resolve every URL in the redirect chain.
+ * That still refuses a redirect into the private network, but a name whose
+ * answer changes between our lookup and the browser's slips through. The
+ * limitation is real and is recorded in docs/decisions.md rather than papered
+ * over.
+ *
+ * Runs before any content is read out of the page: order is the whole point.
+ */
+export async function assertConnectionWasPublic(
+  page: Page,
+  response: Response | null,
+  selfOrigin: string | undefined
+): Promise<void> {
+  if (!enforceConnectedIp()) return;
+  // Landing back on our own address is not a forged request; it is the demo
+  // shop. A chain that ends anywhere else is checked as normal.
+  if (isSameOrigin(page.url(), selfOrigin)) return;
+
+  if (selectedEngine() === "chrome") {
+    const address = response ? await response.serverAddr() : null;
+    // An absent address is not a pass. Something answered and we cannot say
+    // what, which is exactly the case this check exists for.
+    assertScannableIp(address?.ipAddress ?? null, { ignoreEscapeHatch: true });
+    return;
+  }
+
+  const urls = new Set<string>([page.url()]);
+  if (response) {
+    urls.add(response.url());
+    let hop = response.request().redirectedFrom();
+    // A redirect loop would otherwise walk forever; the browser gave up long
+    // before this many hops anyway.
+    for (let i = 0; hop && i < 10; i++) {
+      urls.add(hop.url());
+      hop = hop.redirectedFrom();
+    }
+  }
+  for (const url of urls) {
+    await assertScannableUrl(new URL(url), {
+      selfOrigin,
+      ignoreEscapeHatch: true,
+    });
+  }
 }
 
 async function visitPage(
   context: Awaited<ReturnType<Browser["newContext"]>>,
   href: string,
-  deadline: number
+  deadline: number,
+  selfOrigin: string | undefined
 ): Promise<PageSnapshot> {
   const remaining = Math.max(1000, deadline - Date.now());
   const page: Page = await context.newPage();
   try {
-    await page.goto(href, {
+    const response = await page.goto(href, {
       waitUntil: "domcontentloaded",
       timeout: Math.min(PAGE_TIMEOUT_MS, remaining),
     });
     await page.waitForLoadState("domcontentloaded");
+    await assertConnectionWasPublic(page, response, selfOrigin);
     const extracted = await page.evaluate(extractSnapshotInPage);
     return { url: page.url(), ...extracted };
   } catch (err) {
+    // Everything else becomes an empty snapshot so one bad page cannot sink a
+    // scan. A refusal must not: swallowed here it would return an empty page,
+    // the scan would carry on, and the API would answer 200 with a tool list
+    // for a site it was never allowed to open.
+    if (err instanceof ScanBlockedError) throw err;
     return {
       url: href,
       title: "",

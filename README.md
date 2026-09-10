@@ -37,7 +37,9 @@ Optional Cursor / Claude Desktop: check **local-relay** before generate, or add:
 <script src="https://cdn.jsdelivr.net/npm/@mcp-b/webmcp-local-relay@latest/dist/browser/embed.js"></script>
 ```
 
-Native Chrome and `@mcp-b/webmcp-polyfill` both work. Forms never submit unless the agent passes `dryRun: false` **and** `confirmSubmit: true`.
+Native Chrome and `@mcp-b/webmcp-polyfill` both work. Forms never submit unless the agent passes `dryRun: false` **and** `confirmSubmit: true`, and `click_by_text` presses only labels the scan actually found — an exact match against that list, nothing else.
+
+Each tool also carries the WebMCP safety hints (`readOnlyHint`, `consequentialHint`, `untrustedContentHint`) so a client can show a visitor what it is about to do. They are labels; the checks that stop anything are in the embed itself.
 
 ## Run locally
 
@@ -118,13 +120,28 @@ Run it locally with `npm run cdn:dev`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/scan` | `{ "url": "https://…" }` → job with candidate tools |
+| `POST` | `/api/scan` | `{ "url": "https://…" }` → job with candidate tools. Publicly reachable addresses only; anything resolving into a private range answers 400 and creates no job |
 | `GET` | `/api/jobs/:id` | Job JSON |
 | `POST` | `/api/jobs/:id/generate` | `{ tools, includeLocalRelay }` → writes embed + manifest, then publishes to the CDN when one is configured |
 | `POST` | `/api/jobs/:id/publish` | Retry a failed publish without rebuilding the bundle |
 | `POST` | `/api/jobs/:id/unpublish` | Remove the bundle from the CDN |
 | `GET` | `/api/jobs/:id/embed.js` | Generated script |
 | `GET` | `/api/jobs/:id/manifest.json` | Generated manifest |
+
+Scanning is limited to addresses on the public internet. A URL that resolves
+into a private range — loopback, RFC1918, or the link-local block every cloud
+serves its metadata from — is refused before a browser is opened, and so is a
+redirect that lands in one. The check runs twice: once on the address given, and
+once after the browser has followed whatever redirects it was handed. What that
+second check can see depends on the engine — Chrome reports the address it
+dialled, Lightpanda does not, so under Lightpanda the redirect chain is
+re-resolved instead. `robots.txt` follows the same rule, since it is fetched
+separately.
+
+Scans are also rate limited per client address, and only a small number run at
+once, because each one costs a browser. Over the limit the endpoint answers 429
+with `Retry-After`. The thresholds are environment variables; `.env.example`
+lists them with their defaults.
 
 The job id is an unauthenticated admin key. Anyone holding it can change or
 remove your tools, which is why it never appears in a hosted URL.

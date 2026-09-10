@@ -7,8 +7,9 @@ import {
 } from "./cdn";
 import { applySelection, buildManifest, generateEmbedJs } from "./generator";
 import { createKeyQueue } from "./key-queue";
+import { ScanBlockedError, assertScannableUrl } from "./net-guard";
 import { parseScanUrl, scanSite } from "./scanner";
-import { getJob, readArtifact, saveArtifact, saveJob } from "./store";
+import { deleteJob, getJob, readArtifact, saveArtifact, saveJob } from "./store";
 import type { ScanJob, SelectedTool } from "./types";
 
 const EMBED_FILENAME = "webmcp-forge.embed.js";
@@ -67,8 +68,23 @@ export function publishSummary(job: ScanJob) {
   };
 }
 
-export async function runScan(rawUrl: string): Promise<ScanJob> {
-  parseScanUrl(rawUrl);
+/**
+ * Runs a scan and records it as a job.
+ *
+ * `selfOrigin` is the address this app is answering on. The "Try the demo
+ * shop" button asks for a URL on that origin, which in development is
+ * localhost — an address the guard below otherwise refuses. Scanning yourself
+ * is not server-side request forgery.
+ */
+export async function runScan(
+  rawUrl: string,
+  selfOrigin?: string
+): Promise<ScanJob> {
+  const target = parseScanUrl(rawUrl);
+  // Before the job exists, not after. A refused URL should leave nothing
+  // behind: a file per probe attempt would fill the volume the daily backup
+  // archives, and a job is the wrong record for a request that never ran.
+  await assertScannableUrl(target, { selfOrigin });
   const now = new Date().toISOString();
   const id = newJobId();
   const pending: ScanJob = {
@@ -85,7 +101,7 @@ export async function runScan(rawUrl: string): Promise<ScanJob> {
   await saveJob(pending);
 
   try {
-    const result = await scanSite(rawUrl);
+    const result = await scanSite(rawUrl, { selfOrigin });
     const ready: ScanJob = {
       ...pending,
       url: result.url,
@@ -99,6 +115,17 @@ export async function runScan(rawUrl: string): Promise<ScanJob> {
     await saveJob(ready);
     return ready;
   } catch (err) {
+    // A blocked address is the caller's mistake, not a failed scan. Recording
+    // it as a job would answer 422 with a job object; letting it out reaches
+    // the route's own handler and answers 400 with nothing attached.
+    if (err instanceof ScanBlockedError) {
+      // The second guard fires after this job was written, so the record has to
+      // go with it. Otherwise every probe that arrives by redirect still leaves
+      // a file behind — the outcome the first guard was moved above the write
+      // to prevent.
+      await deleteJob(id);
+      throw err;
+    }
     const failed: ScanJob = {
       ...pending,
       status: "error",

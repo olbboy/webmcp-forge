@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { SCAN_TIMEOUT_MS } from "./config";
 import type { ScanJob } from "./types";
 
 /**
@@ -63,14 +64,43 @@ export async function saveJob(job: ScanJob): Promise<void> {
   );
 }
 
+/**
+ * How long a job may claim to be scanning before nobody believes it.
+ *
+ * A job is written as `scanning` before the work starts, and only the process
+ * doing that work ever moves it on. If that process is killed — by the memory
+ * limit, or by a deploy landing mid-scan — the file is left saying `scanning`
+ * for good, and every later request answers "scan is still running" about a
+ * scan that died weeks ago.
+ */
+const SCANNING_GOES_STALE_MS = SCAN_TIMEOUT_MS * 4;
+
 export async function getJob(id: string): Promise<ScanJob | null> {
   if (!isJobId(id)) return null;
   try {
     const raw = await readFile(path.join(jobsDir(), `${id}.json`), "utf8");
-    return JSON.parse(raw) as ScanJob;
+    const job = JSON.parse(raw) as ScanJob;
+    if (job.status !== "scanning") return job;
+
+    const age = Date.now() - Date.parse(job.updatedAt);
+    if (!Number.isFinite(age) || age <= SCANNING_GOES_STALE_MS) return job;
+    // Corrected on the way out rather than rewritten. The file is still the
+    // record of what happened; this is how every reader should interpret it,
+    // and a read that writes would race with a scan that is merely slow.
+    return {
+      ...job,
+      status: "error",
+      error: "The scan was interrupted before it finished. Start a new one.",
+    };
   } catch {
     return null;
   }
+}
+
+/** Removes a job record. Used when a job should never have been written. */
+export async function deleteJob(id: string): Promise<void> {
+  if (!isJobId(id)) return;
+  await unlink(path.join(jobsDir(), `${id}.json`)).catch(() => {});
 }
 
 export async function saveArtifact(

@@ -37,7 +37,7 @@ export function proposeTools(
     enabled: true,
     inputSchema: emptySchema(),
     source: home?.url,
-    metadata: { annotations: { readOnlyHint: true } },
+    metadata: { annotations: { readOnlyHint: true, untrustedContentHint: true } },
   });
 
   if (allNav.length > 0) {
@@ -53,7 +53,7 @@ export function proposeTools(
         nav: "nav a[href], [role='navigation'] a[href], header a[href]",
       },
       source: home?.url,
-      metadata: { annotations: { readOnlyHint: true } },
+      metadata: { annotations: { readOnlyHint: true, untrustedContentHint: true } },
     });
   }
 
@@ -74,7 +74,7 @@ export function proposeTools(
         },
       },
       source: home?.url,
-      metadata: { annotations: { readOnlyHint: true } },
+      metadata: { annotations: { readOnlyHint: true, untrustedContentHint: true } },
     });
   }
 
@@ -102,7 +102,7 @@ export function proposeTools(
       },
       source: home?.url,
       metadata: {
-        annotations: { readOnlyHint: true },
+        annotations: { readOnlyHint: true, untrustedContentHint: true },
         sampleTitles: allProducts.slice(0, 5).map((p) => p.title),
       },
     });
@@ -178,6 +178,10 @@ export function proposeTools(
       // Every page the form was found on, tried in order by the embed.
       selectors: { form: formSelectors },
       metadata: {
+        // The tool can submit, so it is flagged as consequential even though it
+        // defaults to filling only. The hint describes what the tool is able to
+        // do, not what a particular call asked for.
+        annotations: { consequentialHint: true },
         fields: form.fields,
         action: form.action,
         method: form.method,
@@ -186,25 +190,40 @@ export function proposeTools(
     });
   }
 
-  tools.push({
-    id: "click_by_text",
-    name: sanitizeToolName("click_by_text", used),
-    description:
-      "Click a button or link whose visible text or aria-label matches the given string.",
-    kind: "click_by_text",
-    enabled: true,
-    inputSchema: {
-      type: "object",
-      properties: {
-        text: {
-          type: "string",
-          description: "Visible text or aria-label to match (case-insensitive).",
+  const clickable = clickableAllowlist(pages);
+  // No list means nothing this tool could legitimately press. Offering it
+  // anyway leaves an agent guessing at strings that will all be refused.
+  if (clickable.length > 0) {
+    tools.push({
+      id: "click_by_text",
+      name: sanitizeToolName("click_by_text", used),
+      description: `Click one of the buttons or links found on this site. Only these exact labels work: ${clickable.join(" | ")}`,
+      kind: "click_by_text",
+      enabled: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          text: {
+            type: "string",
+            description:
+              "The exact label to click, from the allowed list (case-insensitive).",
+            enum: clickable,
+          },
+        },
+        required: ["text"],
+      },
+      metadata: {
+        allowlist: clickable,
+        annotations: {
+          consequentialHint: true,
+          // The labels above are text from the scanned site, and they travel
+          // into the tool description an agent reads.
+          untrustedContentHint: true,
         },
       },
-      required: ["text"],
-    },
-    source: home?.url,
-  });
+      source: home?.url,
+    });
+  }
 
   if (allowlist.length > 0) {
     tools.push({
@@ -224,7 +243,12 @@ export function proposeTools(
         },
         required: ["path"],
       },
-      metadata: { allowlist, origin },
+      metadata: {
+        allowlist,
+        origin,
+        // Navigating away discards whatever the visitor had in progress.
+        annotations: { consequentialHint: true },
+      },
       source: home?.url,
     });
   }
@@ -327,4 +351,30 @@ function dedupeForms(forms: ScannedForm[]): MergedForm[] {
     }
   }
   return [...merged.values()];
+}
+
+/**
+ * The labels `click_by_text` is allowed to press, gathered from what was on the
+ * pages at scan time.
+ *
+ * Matching arbitrary text against the live page is how "delete" reaches "Delete
+ * account". A fixed list cannot grow new entries after the fact, so the worst an
+ * agent can do is press something the site already showed a visitor.
+ */
+export function clickableAllowlist(pages: PageSnapshot[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const page of pages) {
+    // Older jobs were stored before this field existed.
+    for (const button of page.buttons ?? []) {
+      const label = (button.text || "").replace(/\s+/g, " ").trim();
+      if (!label) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(label);
+      if (out.length >= 40) return out;
+    }
+  }
+  return out;
 }
