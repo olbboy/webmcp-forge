@@ -131,6 +131,12 @@ remove your tools, which is why it never appears in a hosted URL.
 
 See [DEMO.md](./DEMO.md) for curl examples.
 
+## Documentation
+
+[`docs/`](./docs/README.md) covers the maintainer's view: how the pieces fit,
+what is running in production and how to change it, why it is built this way,
+and what the tests do and do not cover.
+
 ## Tests
 
 `npm test` (Vitest) scans the **local** fixture shop with Playwright, injects the
