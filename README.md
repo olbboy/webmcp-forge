@@ -16,7 +16,7 @@ Forge is for any HTML site. It is not a React-only SDK (MCP-B / Alibaba webmcp-n
    published and the panel gives you one tag to paste before `</body>`:
 
 ```html
-<script src="https://webmcp-forge-cdn.example.workers.dev/e/pub_…/embed.js"></script>
+<script src="https://webmcp-forge-cdn.<account>.workers.dev/e/pub_…/embed.js"></script>
 ```
 
 6. **Self-host.** Download `webmcp-forge.embed.js` and
@@ -113,14 +113,20 @@ should know before pasting the tag:
 - **Content Security Policy.** Add the CDN host to `script-src`:
 
 ```
-Content-Security-Policy: script-src 'self' https://webmcp-forge-cdn.example.workers.dev
+Content-Security-Policy: script-src 'self' https://webmcp-forge-cdn.<account>.workers.dev
 ```
 
-- **Subresource integrity is not available for hosted files.** An `integrity`
-  hash pins one exact byte sequence, and regenerating changes the bundle at the
-  same URL. If your policy requires SRI, self-host and hash your own copy.
+  If you enabled the local-relay option, the embed pulls in a second script at
+  runtime, so `script-src` needs `https://cdn.jsdelivr.net` as well. The embed
+  makes no other network calls, so no `connect-src` entry is required.
+
+- **Subresource integrity is impractical for hosted files.** The tag would
+  work, since the CDN sends the CORS header `integrity` needs. But the hash
+  pins one exact byte sequence and regenerating replaces the bundle at the same
+  URL, breaking every page still carrying the old hash. If your policy requires
+  SRI, self-host and hash your own copy.
 - **The hostname can still change** while this is in beta, which would mean
   updating the tag and the CSP once.
-- **Unpublish is a kill switch with a delay.** It removes the file from the CDN
-  immediately, but caches already handed out keep serving it for the window
-  above.
+- **Unpublish is a kill switch with a delay.** The record is deleted the moment
+  you press it, but edge locations that already read it keep answering for up
+  to a minute, and browsers keep their copy for the window above.

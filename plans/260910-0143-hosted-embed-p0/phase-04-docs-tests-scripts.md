@@ -58,6 +58,25 @@ Lưu ý: trong bước 2 Forge gọi `fetch` thật tới harness (không stub) 
 - [x] E2E chứng minh: URL hosted chứa `pub_`, không chứa `job_`; tools đăng ký từ script tag `src`; unpublish → 404.
 - [x] README mô tả đúng 2 lựa chọn và hạn chế beta; DEMO curl chạy được.
 
+## As built (sai lệch so với plan, sau code review)
+
+E2E xanh. Mọi lệnh curl trong DEMO đã chạy thật, output khớp mô tả.
+
+Hai lần sai liên tiếp ở cùng chỗ: docs Cloudflare viết `listen()` "trả về URL của nó", tôi hiểu là chuỗi nên `String(...)` ra `[object Object]`; sửa thành `url.replace(...)` thì gặp `url.replace is not a function` vì `url` là **đối tượng URL**. Đúng là `url.href`. Dòng assert `expect(publishError ?? publishStatus)` tôi thêm lúc debug đã in thẳng lý do thay vì chỉ "failed", nên giữ lại.
+
+Sửa theo code review:
+- **README thiếu host jsdelivr trong ví dụ CSP.** `generator.ts:383-389` chèn thêm một `<script src>` lúc runtime khi bật local-relay. Chủ site làm đúng theo README sẽ bị chặn script và tích hợp Cursor/Claude Desktop chết im lặng. Đã thêm câu về `cdn.jsdelivr.net`, và ghi rõ embed không gọi mạng gì khác nên không cần `connect-src`.
+- **Block `node -e` trong DEMO chạy là lỗi.** `node -e "script" JOB=val` đẩy `JOB=val` vào argv chứ không vào `process.env`, nên script đọc `undefined`. Bản jq ngay dưới đã làm đúng việc đó. Xoá hẳn block node (DRY), ghi rõ mục này cần `jq`.
+- **`afterAll` không cô lập lỗi**: ba lệnh close nối tiếp, một lệnh reject là bỏ qua phần còn lại và để lại workerd mồ côi dưới `test:watch`. Đổi sang `Promise.allSettled`.
+- **Chưa test nhánh `readyState === "loading"`** — đúng kịch bản README bảo chủ site làm (đặt tag trước `</body>`). Thêm case trong `tests/generator.test.ts`. Mutation xác nhận: phá nhánh `DOMContentLoaded` thì chỉ test mới đỏ, test cũ vẫn xanh.
+- Câu SRI nói quá: SRI **chạy được** (Worker đã set CORS header). Vấn đề thật là hash chết mỗi lần republish tại cùng URL. Đổi "is not available" → "is impractical" kèm giải thích.
+- Câu unpublish "removes immediately" mâu thuẫn với KV `cacheTtl: 60`. Đổi thành: record bị xoá ngay, nhưng edge đã đọc còn trả lời tới một phút.
+- DEMO bước 5 còn tả card cũ trước phase 3. Placeholder hostname thống nhất `<account>` thay vì lẫn `example`.
+
+**Phát hiện đáng ghi về môi trường test:** Chrome CHẶN request script phát sinh lúc phân tích HTML nếu nó vượt sang cổng loopback khác ("Permission was denied for this request to access the `loopback` address space"). Nên E2E phải gắn tag SAU điều hướng bằng `addScriptTag({url})` (vẫn tải theo URL thật, mutation đã xác nhận), còn nhánh parse-time kiểm cùng origin trong `generator.test.ts`. Hai test, hai mối quan tâm.
+
+Chưa kiểm: "no live internet required" chưa thử bằng cách tắt mạng; thời gian deploy Worker thật; hành vi timing thật của KV/edge trên production (chỉ chạy miniflare local).
+
 ## Risk Assessment
 
 - **Harness chọn port ngẫu nhiên xung đột với fixture server.** Cả hai dùng port do OS cấp; xác suất thấp. Tín hiệu: EADDRINUSE. Phản ứng: retry `listen()` một lần.

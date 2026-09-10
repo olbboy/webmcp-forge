@@ -64,9 +64,14 @@ describe("hosted embed, end to end", () => {
   afterAll(async () => {
     delete process.env.CDN_BASE_URL;
     delete process.env.CDN_PUBLISH_TOKEN;
-    await closeBrowser();
-    await fixture?.close();
-    await harness?.close();
+    // Settled rather than sequential: a failure closing one of these must not
+    // skip the others and orphan a workerd process. Under `npm run test:watch`
+    // the vitest process outlives the run, so an orphan would hold its port.
+    await Promise.allSettled([
+      closeBrowser(),
+      fixture?.close(),
+      harness?.close(),
+    ]);
   });
 
   it("publishes on generate, and a browser registers the tools from the CDN", async () => {
@@ -121,9 +126,16 @@ describe("hosted embed, end to end", () => {
     page.on("console", (msg) => logs.push(msg.text()));
     try {
       await page.goto(shopUrl, { waitUntil: "domcontentloaded" });
-      // By URL, not by content: this is the one assertion that proves a site
-      // owner only needs the script tag.
+      // By URL, not by content: the one assertion proving a site owner needs
+      // nothing but the tag.
+      //
+      // The tag is attached after navigation rather than written into the HTML
+      // because Chrome refuses a parse-time subresource request that crosses
+      // into the loopback address space, and the fixture and the Worker sit on
+      // two loopback ports here. Registration during parsing is covered
+      // same-origin in tests/generator.test.ts instead.
       await page.addScriptTag({ url: hostedUrl });
+
       await page.waitForFunction(() =>
         Boolean(
           (window as unknown as { __WEBMCP_FORGE_READY__?: Promise<unknown> })
