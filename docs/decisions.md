@@ -105,6 +105,51 @@ A filesystem error used to reach the client verbatim, path and all, under a 400.
 Only a `JobError` carries a message meant for a caller; anything else is logged
 and answered generically.
 
+## The scan guard sits above the job, not inside the scanner
+
+Two functions are called `runScan`. The route calls the one in `jobs.ts`, which
+catches everything `scanSite` throws and records it as a failed job, so an
+address refused down in the scanner came back as a 422 carrying a job object.
+The check therefore runs in `jobs.ts`, beside `parseScanUrl` and before the
+pending job is written: a refused probe answers 400 and leaves nothing on disk.
+
+A refusal is also re-thrown rather than caught. Both catch blocks on the way out
+turn an error into an empty page and carry on, which for a blocked address means
+the scan finishes, tools are proposed, and the API answers 200 for a site it was
+never allowed to open.
+
+## What the second check can see depends on the browser
+
+The strong check reads the peer address off the response: the address that was
+actually dialled, which closes redirects and DNS rebinding together. Chrome
+reports it. Lightpanda, measured against the image this deployment runs, returns
+null for every response.
+
+So the second check follows the engine. Under Lightpanda it re-resolves every
+URL in the redirect chain instead, which still refuses a redirect into the
+private network but cannot see a name whose answer changes between our lookup
+and the browser's. That gap is real; it is the price of the engine that costs
+twenty megabytes instead of three hundred and fifty.
+
+Playwright's request interception is not a substitute here. It registers under
+Lightpanda and fires, but the route object has no `url()`, so there is nothing
+to decide on — and installing it makes navigation hang.
+
+## The escape hatch announces itself, and redirects never inherit it
+
+The test suite scans a fixture on 127.0.0.1, so the guard needs a way off. It is
+an environment variable rather than a code path, and it prints a warning the
+first time it is read: checking it at deploy time does nothing about someone
+adding it to `.env` months later to debug one site.
+
+The two checks read separate variables. Sharing one is how a test for the second
+check passes because the first one refused, and keeps passing after the second
+is deleted.
+
+A redirect target never inherits the hatch. The hatch exists so this project can
+point the scanner at a fixture it runs itself; where a redirect leads is chosen
+by the site being scanned.
+
 ## Things deliberately not done
 
 | Not done | Why |

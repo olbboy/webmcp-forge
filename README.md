@@ -118,13 +118,20 @@ Run it locally with `npm run cdn:dev`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/scan` | `{ "url": "https://…" }` → job with candidate tools |
+| `POST` | `/api/scan` | `{ "url": "https://…" }` → job with candidate tools. Publicly reachable addresses only; anything resolving into a private range answers 400 and creates no job |
 | `GET` | `/api/jobs/:id` | Job JSON |
 | `POST` | `/api/jobs/:id/generate` | `{ tools, includeLocalRelay }` → writes embed + manifest, then publishes to the CDN when one is configured |
 | `POST` | `/api/jobs/:id/publish` | Retry a failed publish without rebuilding the bundle |
 | `POST` | `/api/jobs/:id/unpublish` | Remove the bundle from the CDN |
 | `GET` | `/api/jobs/:id/embed.js` | Generated script |
 | `GET` | `/api/jobs/:id/manifest.json` | Generated manifest |
+
+Scanning is limited to addresses on the public internet. A URL that resolves
+into a private range — loopback, RFC1918, or the link-local block every cloud
+serves its metadata from — is refused before a browser is opened, and so is a
+redirect that lands in one. The check runs twice: once on the address given, and
+once on what the browser actually connected to. `robots.txt` follows the same
+rule, since it is fetched separately.
 
 The job id is an unauthenticated admin key. Anyone holding it can change or
 remove your tools, which is why it never appears in a hosted URL.
