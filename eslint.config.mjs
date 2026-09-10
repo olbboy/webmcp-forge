@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated embed bundles, not source. Linting them buries real findings.
+    "data/**",
   ]),
 ]);
 

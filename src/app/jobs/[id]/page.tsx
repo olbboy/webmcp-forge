@@ -1,4 +1,5 @@
 import { JobCatalog } from "@/components/job-catalog";
+import { isCdnConfigured } from "@/lib/cdn";
 import { getJob } from "@/lib/store";
 import { notFound } from "next/navigation";
 
@@ -14,7 +15,9 @@ export default async function JobPage({
   if (!job) notFound();
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:py-10">
-      <JobCatalog job={job} />
+      {/* Whether hosting is available is server state; the browser has no
+          way to read it, so it is passed down. */}
+      <JobCatalog job={job} cdnConfigured={isCdnConfigured()} />
     </main>
   );
 }

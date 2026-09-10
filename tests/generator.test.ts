@@ -31,7 +31,7 @@ describe("generated embed.js registers and executes tools", () => {
         candidates: scan.candidates,
         includeLocalRelay: false,
       };
-      const js = generateEmbedJs(buildManifest(job, selected, false));
+      const js = generateEmbedJs(buildManifest(job, selected, false, 1, new Date().toISOString()));
       expect(js).toContain("document.modelContext");
       expect(js).toContain("navigator.modelContext");
       expect(js).toContain("[WebMCP Forge] registered:");
@@ -88,6 +88,67 @@ describe("generated embed.js registers and executes tools", () => {
       expect(Number(products.count)).toBeGreaterThanOrEqual(3);
 
       await page.close();
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it("registers when the tag runs while the document is still parsing", async () => {
+    // Where the docs tell an owner to put the tag: before </body>, which means
+    // it executes at readyState "loading" and has to wait for DOMContentLoaded
+    // rather than reading the DOM straight away. Injected inline and
+    // same-origin, because Chrome blocks a parse-time subresource request that
+    // crosses loopback ports.
+    const fixture = await startFixtureServer();
+    try {
+      const scan = await scanSite(`${fixture.url}/index.html`);
+      const selected = scan.candidates.filter((c) =>
+        ["get_page_info", "list_products"].includes(c.name)
+      );
+      const job: ScanJob = {
+        id: "job_testparsetime01",
+        url: scan.url,
+        origin: scan.origin,
+        status: "ready",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        pages: scan.pages,
+        candidates: scan.candidates,
+        includeLocalRelay: false,
+      };
+      const js = generateEmbedJs(
+        buildManifest(job, selected, false, 1, new Date().toISOString())
+      );
+
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      const shopUrl = `${fixture.url}/index.html`;
+      try {
+        await page.route(shopUrl, async (route) => {
+          const response = await route.fetch();
+          const html = await response.text();
+          await route.fulfill({
+            response,
+            body: html.replace("</body>", `<script>${js}</script></body>`),
+          });
+        });
+        await page.goto(shopUrl, { waitUntil: "load" });
+
+        const registered = await page.evaluate(async () => {
+          const ready = (
+            window as unknown as { __WEBMCP_FORGE_READY__?: Promise<unknown> }
+          ).__WEBMCP_FORGE_READY__;
+          if (!ready) throw new Error("embed did not boot");
+          await ready;
+          const ctx = document.modelContext || navigator.modelContext;
+          if (!ctx) throw new Error("modelContext missing");
+          return (await ctx.getTools()).map((t) => t.name);
+        });
+        expect(registered).toContain("get_page_info");
+        expect(registered).toContain("list_products");
+      } finally {
+        await page.close();
+      }
     } finally {
       await fixture.close();
     }

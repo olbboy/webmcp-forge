@@ -9,30 +9,100 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import type { publishSummary } from "@/lib/jobs";
 import { cn } from "@/lib/utils";
 import type { ScanJob, SelectedTool, ToolCandidate } from "@/lib/types";
 
-type Props = { job: ScanJob };
+type Props = {
+  job: ScanJob;
+  /** Whether the server has a CDN to publish to. Read from env, so server-only. */
+  cdnConfigured: boolean;
+};
 
-export function JobCatalog({ job }: Props) {
+/**
+ * Derived from the server helper rather than restated, so dropping a field
+ * from the response becomes a compile error instead of a panel that quietly
+ * stops showing the snippet. `import type` is erased at build time, so this
+ * pulls no server code into the browser bundle.
+ */
+type PublishState = ReturnType<typeof publishSummary>;
+
+const STATUS_LABEL: Record<NonNullable<ScanJob["publishStatus"]>, string> = {
+  published: "published",
+  failed: "publish failed",
+  unpublished: "unpublished",
+  skipped: "not hosted",
+};
+
+const STATUS_VARIANT: Record<
+  NonNullable<ScanJob["publishStatus"]>,
+  "secondary" | "destructive" | "outline"
+> = {
+  published: "secondary",
+  failed: "destructive",
+  unpublished: "outline",
+  skipped: "outline",
+};
+
+export function JobCatalog({ job, cdnConfigured }: Props) {
   const [tools, setTools] = useState<ToolCandidate[]>(() =>
     job.candidates.map((c) => ({ ...c }))
   );
   const [includeLocalRelay, setIncludeLocalRelay] = useState(
     job.includeLocalRelay
   );
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<
+    "generate" | "publish" | "unpublish" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Failures from the publish buttons, kept apart from `error` so each message
+   * can render next to the control that caused it.
+   */
+  const [actionError, setActionError] = useState<string | null>(null);
+  const busy = pending !== null;
   const [generated, setGenerated] = useState(job.status === "generated");
   const [copied, setCopied] = useState<string | null>(null);
+  const [publish, setPublish] = useState<PublishState>(() => ({
+    id: job.id,
+    status: job.status,
+    publishedAt: job.publishedAt,
+    version: job.version,
+    publicId: job.publicId,
+    publishStatus: job.publishStatus,
+    publishedVersion: job.publishedVersion,
+    publishError: job.publishError,
+    hostedEmbedUrl: job.hostedEmbedUrl,
+    hostedManifestUrl: job.hostedManifestUrl,
+  }));
 
   const enabledCount = tools.filter((t) => t.enabled).length;
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "";
-  const embedUrl = `${origin}/api/jobs/${job.id}/embed.js`;
-  const manifestUrl = `${origin}/api/jobs/${job.id}/manifest.json`;
-  const snippet = `<script src="${embedUrl}"></script>`;
+  // Relative, so the same markup works on the server and in the browser.
+  const adminEmbedUrl = `/api/jobs/${job.id}/embed.js`;
+  const adminManifestUrl = `/api/jobs/${job.id}/manifest.json`;
   const relaySnippet = `<script src="https://cdn.jsdelivr.net/npm/@mcp-b/webmcp-local-relay@latest/dist/browser/embed.js"></script>`;
+
+  const hostedSnippet = publish.hostedEmbedUrl
+    ? `<script src="${publish.hostedEmbedUrl}"></script>`
+    : "";
+  // The version only belongs on the test link. In the snippet it would force
+  // the owner to re-paste the tag after every regenerate.
+  const testUrl = publish.hostedEmbedUrl
+    ? `${publish.hostedEmbedUrl}?v=${publish.publishedVersion ?? publish.version ?? 1}`
+    : "";
+  // Keep showing the panel for a job that was published before the CDN was
+  // switched off, so its owner can still find the Unpublish button.
+  const showHosted = cdnConfigured || Boolean(publish.publicId);
+  // The server only requires a configured CDN and a bundle on disk, so every
+  // state except "already published" has a way forward. Leaving `skipped` out
+  // would strand any job generated before the CDN was switched on.
+  const canPublish = cdnConfigured && publish.publishStatus !== "published";
+  const publishLabel =
+    publish.publishStatus === "failed"
+      ? "Try publishing again"
+      : publish.publishStatus === "unpublished"
+        ? "Publish again"
+        : "Publish";
 
   const pagesOk = job.pages.filter((p) => !p.error).length;
 
@@ -45,8 +115,9 @@ export function JobCatalog({ job }: Props) {
   }
 
   async function generate() {
-    setBusy(true);
+    setPending("generate");
     setError(null);
+    setActionError(null);
     try {
       const payload: SelectedTool[] = tools.map((t) => ({
         id: t.id,
@@ -59,20 +130,49 @@ export function JobCatalog({ job }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ tools: payload, includeLocalRelay }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as PublishState & { error?: string };
       if (!res.ok) throw new Error(data.error || "Generate failed");
+      setPublish(data);
       setGenerated(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate failed");
     } finally {
-      setBusy(false);
+      setPending(null);
+    }
+  }
+
+  /** Retry a failed publish, or take the bundle off the CDN. */
+  async function callPublishRoute(action: "publish" | "unpublish") {
+    setPending(action);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/${action}`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as PublishState & { error?: string };
+      if (!res.ok) throw new Error(data.error || `Could not ${action}`);
+      // Replaced whole, never merged: the server clears fields by omitting
+      // them, and merging would keep a stale error or version around.
+      setPublish(data);
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : `Could not ${action}`
+      );
+    } finally {
+      setPending(null);
     }
   }
 
   async function copy(label: string, text: string) {
-    await navigator.clipboard.writeText(text);
-    setCopied(label);
-    setTimeout(() => setCopied(null), 1500);
+    try {
+      // Absent outside a secure context, so an http deployment lands here.
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+    } catch {
+      // The snippet is selectable text, so say so instead of failing silently.
+      setCopied(`${label}:manual`);
+    }
+    setTimeout(() => setCopied(null), 2500);
   }
 
   const kinds = useMemo(() => {
@@ -226,68 +326,195 @@ export function JobCatalog({ job }: Props) {
       ) : null}
 
       {generated ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Embed on your site</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <p>
-              Download the files (CSP-friendly — serve them as static JS/JSON, do
-              not paste a huge inline script unless your CSP allows it). Place this
-              before <code>&lt;/body&gt;</code>:
-            </p>
-            <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs">
-              {snippet}
-            </pre>
-            <div className="flex flex-wrap gap-2">
+        <div className={cn("grid gap-4", showHosted && "lg:grid-cols-2")}>
+          {showHosted ? (
+            <Card>
+              <CardHeader className="space-y-2">
+                <div
+                  className="flex flex-wrap items-center gap-2"
+                  aria-live="polite"
+                >
+                  <CardTitle>Hosted</CardTitle>
+                  <Badge variant="secondary">beta</Badge>
+                  {publish.publishStatus ? (
+                    <Badge variant={STATUS_VARIANT[publish.publishStatus]}>
+                      {STATUS_LABEL[publish.publishStatus]}
+                    </Badge>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                {publish.hostedEmbedUrl ? (
+                  <>
+                    <p>
+                      We serve this file for you. Paste the tag before{" "}
+                      <code>&lt;/body&gt;</code>:
+                    </p>
+                    <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs">
+                      {hostedSnippet}
+                    </pre>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={cn(
+                          buttonVariants({ variant: "outline", size: "sm" })
+                        )}
+                        onClick={() => copy("hosted", hostedSnippet)}
+                      >
+                        {copied === "hosted"
+                          ? "Copied"
+                          : copied === "hosted:manual"
+                            ? "Select it above"
+                            : "Copy script tag"}
+                      </button>
+                      <a
+                        className={cn(
+                          buttonVariants({ variant: "outline", size: "sm" })
+                        )}
+                        href={testUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Test the file
+                      </a>
+                      <button
+                        type="button"
+                        className={cn(
+                          buttonVariants({ variant: "outline", size: "sm" })
+                        )}
+                        onClick={() => callPublishRoute("unpublish")}
+                        disabled={busy}
+                      >
+                        {pending === "unpublish" ? "Unpublishing…" : "Unpublish"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">
+                    {publish.publishStatus === "unpublished"
+                      ? "Removed from the CDN. Publishing again reuses the same URL, so a tag already on your site keeps working."
+                      : publish.publishStatus === "failed"
+                        ? "The bundle was built but could not reach the CDN. The self-host download is unaffected."
+                        : "Nothing is hosted for this job yet."}
+                  </p>
+                )}
+
+                {publish.publishStatus === "failed" &&
+                publish.hostedEmbedUrl ? (
+                  <p className="text-muted-foreground">
+                    The tag above still works. Visitors keep getting the last
+                    version that reached the CDN until this succeeds.
+                  </p>
+                ) : null}
+
+                {publish.publishError ? (
+                  <p className="text-sm text-destructive">
+                    {publish.publishError}
+                  </p>
+                ) : null}
+
+                {canPublish ? (
+                  <button
+                    type="button"
+                    className={cn(buttonVariants({ size: "sm" }))}
+                    onClick={() => callPublishRoute("publish")}
+                    disabled={busy}
+                  >
+                    {pending === "publish" ? "Publishing…" : publishLabel}
+                  </button>
+                ) : null}
+
+                {/* Kept inside the panel: an error shown above the fold, next
+                    to Generate, reads as unrelated to the button just used. */}
+                {actionError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {actionError}
+                  </p>
+                ) : null}
+
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  <li>
+                    This file is public. Anyone with the link can download it.
+                  </li>
+                  <li>
+                    A new version, or an unpublish, reaches visitors within
+                    about seven minutes. Edge and browser caches hold the old
+                    copy until then.
+                  </li>
+                  <li>
+                    Beta: the hostname can still change before general
+                    availability, and you would need to update the tag.
+                  </li>
+                  <li>
+                    The link to <em>this page</em> is your admin link. Anyone
+                    who has it can change or remove your tools. Do not share it.
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Self-host</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <p>
+                Download both files, serve them from your own origin, and point
+                the tag at your copy. Use this when your policy forbids
+                third-party scripts, or when you want a subresource integrity
+                hash, which hosting cannot offer because the file changes when
+                you regenerate.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" })
+                  )}
+                  href={adminEmbedUrl}
+                  download="webmcp-forge.embed.js"
+                >
+                  Download embed.js
+                </a>
+                <a
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" })
+                  )}
+                  href={adminManifestUrl}
+                  download="webmcp-forge.manifest.json"
+                >
+                  Download manifest.json
+                </a>
+              </div>
+              <p className="text-muted-foreground">
+                The script waits for the DOM, registers only the tools you
+                enabled on{" "}
+                <code>document.modelContext ?? navigator.modelContext</code>,
+                and logs <code>[WebMCP Forge] registered: …</code>.
+              </p>
+              <p className="text-muted-foreground">
+                Optional Cursor / Claude Desktop snippet, if you did not bake
+                the relay into the bundle:
+              </p>
+              <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs">
+                {relaySnippet}
+              </pre>
               <button
                 type="button"
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                onClick={() => copy("tag", snippet)}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" })
+                )}
+                onClick={() => copy("relay", relaySnippet)}
               >
-                {copied === "tag" ? "Copied" : "Copy script tag"}
+                {copied === "relay"
+                  ? "Copied"
+                  : copied === "relay:manual"
+                    ? "Select it above"
+                    : "Copy relay tag"}
               </button>
-              <a
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                href={embedUrl}
-                download="webmcp-forge.embed.js"
-              >
-                Download embed.js
-              </a>
-              <a
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                href={manifestUrl}
-                download="webmcp-forge.manifest.json"
-              >
-                Download manifest.json
-              </a>
-            </div>
-            <p className="text-muted-foreground">
-              Self-hosting: copy <code>webmcp-forge.embed.js</code> next to your
-              site assets and point the script src at your own origin. The script
-              waits for DOM, registers only the selected tools on{" "}
-              <code>document.modelContext ?? navigator.modelContext</code>, and
-              logs <code>[WebMCP Forge] registered: …</code>.
-            </p>
-            <p className="text-muted-foreground">
-              Optional Cursor / Claude Desktop snippet (if you did not bake relay
-              into the bundle):
-            </p>
-            <pre className="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs">
-              {relaySnippet}
-            </pre>
-            <p className="text-xs text-muted-foreground">
-              Hosted URLs for this anonymous job:{" "}
-              <a className="underline" href={embedUrl}>
-                embed.js
-              </a>
-              {" · "}
-              <a className="underline" href={manifestUrl}>
-                manifest.json
-              </a>
-            </p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       <details className="rounded-xl border p-4 text-sm">

@@ -41,12 +41,18 @@ export function applySelection(
 export function buildManifest(
   job: ScanJob,
   tools: ToolCandidate[],
-  includeLocalRelay: boolean
+  includeLocalRelay: boolean,
+  version: number,
+  generatedAt: string
 ): EmbedManifest {
   return {
     name: "webmcp-forge",
-    version: "1.0.0",
-    generatedAt: new Date().toISOString(),
+    // Matches the version published to the CDN, so a bundle found in the wild
+    // can be traced back to the job state that produced it.
+    version: String(version),
+    // Supplied rather than read from the clock: rebuilding a lost artifact has
+    // to reproduce the exact bytes that were published under this version.
+    generatedAt,
     siteUrl: job.url,
     origin: job.origin,
     includeLocalRelay,

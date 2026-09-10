@@ -1,0 +1,25 @@
+{
+  // Hosted-embed CDN for WebMCP Forge.
+  // Deploy from the repo root: `npm run cdn:deploy`
+  "name": "webmcp-forge-cdn",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+
+  // Serves the beta hostname https://webmcp-forge-cdn.<account>.workers.dev
+  // until a custom domain is attached.
+  "workers_dev": true,
+
+  "kv_namespaces": [
+    {
+      "binding": "EMBEDS",
+      // Replace after `npx wrangler kv namespace create EMBEDS -c cdn/wrangler.jsonc`.
+      // `wrangler dev` and the tests use a local namespace and ignore this id.
+      "id": "replace-with-kv-namespace-id"
+    }
+  ],
+
+  "observability": { "enabled": true }
+
+  // PUBLISH_TOKEN is a secret, never a var here:
+  // `npx wrangler secret put PUBLISH_TOKEN -c cdn/wrangler.jsonc`
+}
