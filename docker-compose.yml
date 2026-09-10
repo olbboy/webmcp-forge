@@ -45,6 +45,17 @@ services:
     image: lightpanda/browser:nightly
     profiles: ["lightpanda"]
     restart: unless-stopped
+    environment:
+      # Telemetry is on by default and reports to telemetry.lightpanda.io.
+      # This browser opens other people's sites on their behalf, so it does not
+      # get to phone home about that. Verified against the nightly image: the
+      # startup line changes from disabled=false to disabled=true.
+      #
+      # The second variable covers the separate crash channel at
+      # crash.lightpanda.io. Neither is documented, so both are worth
+      # re-checking when the image is updated.
+      LIGHTPANDA_DISABLE_TELEMETRY: "true"
+      LIGHTPANDA_DISABLE_CORE_DUMP: "true"
     # Measured at 18 MB after four pages and 44 MB after three real sites, so
     # this cap is generous. Chrome needs roughly twenty times as much.
     mem_limit: 256m
