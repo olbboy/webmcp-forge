@@ -15,8 +15,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Past this, the scan is not slow, it is stuck. The request gets an answer
- * either way; the slot it held is reclaimed separately.
+ * Past this, the scan is not slow, it is stuck, and the caller gets an answer.
+ * The work carries on holding its slot until it stops, which is the honest
+ * accounting: a browser is still open either way.
  */
 const HARD_TIMEOUT_MS = SCAN_TIMEOUT_MS * 2;
 
@@ -74,6 +75,8 @@ export async function POST(request: Request) {
     );
   }
 
+  let scanStarted = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const slot = takeSlot(rateKey(clientIp(request)));
     if (!slot.ok) {
@@ -83,24 +86,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const selfOrigin = developmentSelfOrigin(request);
+    const scan = runScan(body.url, developmentSelfOrigin(request));
+    scanStarted = true;
+    // The slot belongs to the work, not to this request. Giving it back when
+    // the wait below runs out would advertise capacity while a browser is
+    // still open on the scan that overran.
+    void scan.then(
+      () => releaseScan(slotToken),
+      () => releaseScan(slotToken)
+    );
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const job = await Promise.race([
-        runScan(body.url, selfOrigin),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error("Scan timed out")),
-            HARD_TIMEOUT_MS
-          );
-        }),
-      ]);
-      const status = job.status === "error" ? 422 : 200;
-      return Response.json(job, { status });
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
+    const job = await Promise.race([
+      scan,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Scan timed out")),
+          HARD_TIMEOUT_MS
+        );
+      }),
+    ]);
+    const status = job.status === "error" ? 422 : 200;
+    return Response.json(job, { status });
   } catch (err) {
     // A refused address answers 400 with nothing attached: no job was created,
     // and the message is the same one every other refusal uses so the reply
@@ -111,8 +117,9 @@ export async function POST(request: Request) {
     const message = err instanceof Error ? err.message : "Scan failed";
     return Response.json({ error: message }, { status: 400 });
   } finally {
-    // Paired with the acquire above, and outside every early return. A slot
-    // that leaks here is a slot nobody gets back.
-    releaseScan(slotToken);
+    if (timer) clearTimeout(timer);
+    // Only for the paths that never reached the scan. Once it is running, the
+    // handler attached above owns the slot.
+    if (!scanStarted) releaseScan(slotToken);
   }
 }

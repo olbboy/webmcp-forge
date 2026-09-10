@@ -157,3 +157,56 @@ describe("saving an artifact", () => {
     }
   });
 });
+
+describe("a job that says it is still scanning", () => {
+  function scanningJob(id: string, updatedAt: string): ScanJob {
+    return {
+      id,
+      url: "https://example.test/",
+      origin: "https://example.test",
+      status: "scanning",
+      createdAt: updatedAt,
+      updatedAt,
+      pages: [],
+      candidates: [],
+      includeLocalRelay: false,
+    };
+  }
+
+  it("is believed while the claim is still plausible", async () => {
+    const job = scanningJob("job_scanfresh0001", new Date().toISOString());
+    await saveJob(job);
+    expect((await getJob(job.id))?.status).toBe("scanning");
+  });
+
+  it("is read as failed once no scan could still be running", async () => {
+    // The process that would have moved this on was killed — by the memory
+    // limit, or by a deploy landing mid-scan. Left alone the file says
+    // "scanning" for good, and every later request answers "scan is still
+    // running" about a scan that died weeks ago.
+    const longAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const job = scanningJob("job_scanstale0001", longAgo);
+    await saveJob(job);
+
+    const read = await getJob(job.id);
+    expect(read?.status).toBe("error");
+    expect(read?.error).toMatch(/interrupted/i);
+  });
+
+  it("leaves the file alone, because a slow scan is not a dead one", async () => {
+    const longAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const job = scanningJob("job_scanstale0002", longAgo);
+    await saveJob(job);
+    await getJob(job.id);
+
+    // Correcting on the way out, not rewriting: a read that writes would race
+    // with a scan that is merely slow and overwrite its result.
+    const onDisk = JSON.parse(
+      await readFile(
+        path.join(process.env.WEBMCP_DATA_DIR as string, "jobs", `${job.id}.json`),
+        "utf8"
+      )
+    ) as ScanJob;
+    expect(onDisk.status).toBe("scanning");
+  });
+});
