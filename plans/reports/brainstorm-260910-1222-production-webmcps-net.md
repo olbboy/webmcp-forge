@@ -334,3 +334,48 @@ Khác biệt với bank-hub: đây là lựa chọn có chủ đích (giữ brow
 - Workers Logs có che header `Authorization` không → publish token có thể nằm trong log Cloudflare.
 - Vì sao dockerd phình 443 MiB. Giả thuyết "Chrome spawn mỗi 30 phút" của tôi **sai** — Chrome chỉ khởi động ~1 lần/ngày rồi nằm im. Nguyên nhân gốc chưa rõ; nên đo lại sau 2–4 tuần.
 - `data/jobs` là bind mount `/opt/webmcp-forge/data`, chưa có sao lưu định kỳ.
+
+---
+
+## Chốt: đóng browser khi rảnh + thu dọn xác tiến trình (10/9/2026 21:20)
+
+Quyết định 1b (đóng browser khi rảnh) và 2 (merge vào `main`, droplet bám `main`) đã xong.
+
+| Thay đổi | PR |
+|---|---|
+| Đếm lượt quét, đóng browser sau 5 phút rảnh; sửa race lúc teardown | [#2](https://github.com/olbboy/webmcp-forge/pull/2) |
+| `init: true` để thu dọn tiến trình con Chrome bỏ lại | [#3](https://github.com/olbboy/webmcp-forge/pull/3) |
+
+Droplet giờ bám `main` @ `6d70ef4`, upstream `origin/main`, giống bank-hub.
+
+### Bài học đo đạc: `docker stats` gộp cả page cache
+
+Lần đo đầu tôi tưởng bản sửa hỏng: sau 5 phút rảnh `docker stats` vẫn báo 362 MiB thay vì về ~110 MiB. Đọc `memory.stat` của cgroup mới ra sự thật:
+
+| Thành phần | Ý nghĩa |
+|---|---|
+| `anon` 116 MiB | Bộ nhớ thật app giữ — **Chrome đã thoát** |
+| `file` 298 MiB | Page cache từ file Chrome đã đọc — **kernel thu hồi khi cần** |
+
+`docker stats` cộng cả hai. Nhìn con số tổng thì tưởng rò rỉ; nhìn `anon` mới biết đúng sai.
+
+### Kiểm chứng trọn vòng trên production
+
+| Thời điểm | `anon` | Chrome sống | Zombie |
+|---|---|---|---|
+| Trước khi quét | 57,9 MiB | 0 | 0 |
+| Ngay sau khi quét | 225,7 MiB | 9 | 0 |
+| Sau 5 phút rảnh | **111,5 MiB** | **0** | **0** |
+
+`file` cache còn 142 MiB, thu hồi được. `docker stats` tổng: 164 MiB. Máy còn **1.304 MiB** khả dụng. bank-hub không bị ảnh hưởng (sync-worker 27 MiB).
+
+### Khiếm khuyết thật tìm được nhờ đo
+
+Chrome thoát để lại 4 tiến trình `<defunct>`. RSS = 0 nên không tốn RAM, nhưng `npm start` ở PID 1 không thu dọn, nên mỗi lượt quét bồi thêm một nhóm cho tới khi cạn bảng PID. `init: true` đặt init thật ở PID 1 để thu dọn, đồng thời chuyển tiếp tín hiệu nên `docker stop` tắt êm thay vì giết.
+
+## Còn treo
+
+- Workers Logs có che header `Authorization` không → publish token có thể nằm trong log Cloudflare.
+- `data/jobs` chưa có sao lưu định kỳ.
+- `ufw` vẫn tắt.
+- Nguyên nhân dockerd từng phình 443 MiB chưa rõ; nên đo lại sau 2–4 tuần.
