@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Worker cdn/ + test harness"
-status: todo
+status: completed
 priority: P1
 effort: "4h"
 dependencies: []
@@ -14,8 +14,8 @@ Worker Cloudflare phục vụ `embed.js` / `manifest.json` từ KV, nhận PUT/D
 
 ## Requirements
 
-- [ ] Functional: 5 route ở bảng dưới, header cache/ETag/CORS/nosniff, 404 khi thiếu, 401 sai token, 409 version lùi, 413 body quá cỡ.
-- [ ] Non-functional: không có `cdn/package.json`; wrangler ở root; `.wrangler/`, `.dev.vars` ignore; `.env.example` commit được.
+- [x] Functional: 5 route ở bảng dưới, header cache/ETag/CORS/nosniff, 404 khi thiếu, 401 sai token, 409 version lùi, 413 body quá cỡ.
+- [x] Non-functional: không có `cdn/package.json`; wrangler ở root; `.wrangler/`, `.dev.vars` ignore; `.env.example` commit được.
 
 ## Architecture
 
@@ -55,17 +55,33 @@ Worker Cloudflare phục vụ `embed.js` / `manifest.json` từ KV, nhận PUT/D
 
 ## Todo
 
-- [ ] wrangler devDependency + scripts root
-- [ ] `cdn/wrangler.jsonc`, `src/index.ts`, `src/auth.ts`, `src/kv.ts`
-- [ ] `tests/cdn-worker.test.ts` xanh
-- [ ] `.gitignore`, `.env.example`, `cdn/README.md`
+- [x] wrangler devDependency + scripts root
+- [x] `cdn/wrangler.jsonc`, `src/index.ts`, `src/auth.ts`, `src/kv.ts`
+- [x] `tests/cdn-worker.test.ts` xanh
+- [x] `.gitignore`, `.env.example`, `cdn/README.md`
 
 ## Success Criteria
 
-- [ ] `npx vitest run tests/cdn-worker.test.ts` xanh, ≥ 10 case ở bước 4.
-- [ ] `npm test` vẫn xanh 6 test cũ.
-- [ ] `git status` thấy `.env.example`; không thấy `.wrangler/`.
-- [ ] `npm run cdn:dev` phục vụ `/health` ở local.
+- [x] `npx vitest run tests/cdn-worker.test.ts` xanh, ≥ 10 case ở bước 4.
+- [x] `npm test` vẫn xanh 6 test cũ.
+- [x] `git status` thấy `.env.example`; không thấy `.wrangler/`.
+- [x] `npm run cdn:dev` phục vụ `/health` ở local.
+
+## As built (sai lệch so với bản plan, sau code review)
+
+Rủi ro R1 và R2 đều không xảy ra: `createTestHarness` có trong wrangler 4.130.0 và config inline nhận `vars`, nên không cần fallback `.dev.vars` hay spawn `wrangler dev`.
+
+Thêm so với plan (đều từ finding của code review, có bằng chứng):
+- **HEAD** được chấp nhận ở mọi route trả GET. Uptime monitor mặc định dùng HEAD; trả 405 sẽ báo Worker chết.
+- **503 JSON** khi KV throw (`route()` bọc trong try/catch). Free tier chặn ở 1.000 write/ngày, khi vượt KV throw và workerd sẽ trả trang HTML mặc định — phá contract JSON mà client phase 2 dựa vào.
+- **Chấp nhận weak ETag** (`W/"n"`) khi so `If-None-Match`. Docs Cloudflare: "In some situations Cloudflare will convert strong ETags to weak ETags" khi nén lại. Không xử lý thì 304 không bao giờ khớp và mỗi lần revalidate lại tải nguyên bundle.
+- **CORS + nosniff trên cả response lỗi**, để caller đọc được status thay vì thấy network error.
+- **Guard shape cho record KV**: JSON hợp lệ nhưng sai shape trước đây cho ra 200 với body rỗng và cache 5 phút.
+- Test: 23 case thay vì ≥10, gồm case token sai **cùng độ dài**. Mutation test xác nhận: bỏ so sánh nội dung token thì chỉ đúng case này fail, các case còn lại vẫn xanh.
+
+Bác bỏ một finding, có bằng chứng: đề xuất **bắt buộc `content-length`** (411) làm hỏng 11/23 test vì `harness.fetch` gửi body chuỗi **không** kèm header đó. Không thể khẳng định client production luôn gửi, nên giữ `content-length` làm fast path và đo kích thước thật làm kiểm tra chính thức. Nhánh đo thật giờ có test riêng (body streamed 3 MB → 413).
+
+Chưa kiểm được: Workers Logs có redact header `Authorization` hay không — docs không nói. Đã ghi thành mục "Open question before production" trong `cdn/README.md`.
 
 ## Risk Assessment
 

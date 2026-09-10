@@ -9,7 +9,9 @@
     "start": "next start --port 43127",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "cdn:dev": "wrangler dev -c cdn/wrangler.jsonc",
+    "cdn:deploy": "wrangler deploy -c cdn/wrangler.jsonc"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -41,6 +43,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "wrangler": "^4.130.0"
   }
 }

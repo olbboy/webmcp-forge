@@ -33,6 +33,17 @@ POST /api/jobs/:id/unpublish → unpublishEmbed(publicId) → publishStatus = "u
 GET  /api/jobs/:id/embed.js  → không đổi; lazy path dùng job.version ?? 1, không bump, không publish
 ```
 
+**Contract fixed by phase 1 (do not re-derive):**
+- Every Worker response body is JSON `{ error }` on failure. 503 means KV was
+  unavailable and the publish should be recorded as `failed`, not retried
+  immediately.
+- 409 means a newer version is already stored. Treat it as success-by-supersede:
+  leave the newer state alone, do not downgrade `publishStatus`.
+- The Worker's 409 guard is defeatable inside a 60-second KV cache window, so
+  Forge must **abandon a pending retry once a newer generate starts** for the
+  same `publicId`. Single-flight alone is not enough; a queued retry has to be
+  dropped, not merely serialized behind the new publish.
+
 `src/lib/cdn.ts`:
 - `isCdnConfigured()` = có cả `CDN_BASE_URL` và `CDN_PUBLISH_TOKEN`.
 - `hostedUrls(publicId)` → `{ embed, manifest }` = `${base}/e/${publicId}/embed.js|manifest.json` (base bỏ dấu `/` cuối).
