@@ -126,12 +126,19 @@ Bản đầu gộp ba phase một commit, và công tắc runtime chỉ có ở 
 
 ## Kết quả triển khai
 
-Hai lần lên production, cách nhau bởi một vòng rà soát mã.
+Ba lần lên production.
 
 | Lần | Commit | Nội dung |
 |---|---|---|
 | 1 · 2026-09-11 02:1x | `6d0ab34` | Phase 1-3, deploy hai bước: bật với giới hạn tắt, đọc log, rồi bật giới hạn |
 | 2 · 2026-09-11 03:1x | `7ae32e5` | Bốn mục còn lại từ rà soát mã |
+| 3 · 2026-09-11 03:4x | `1a7ac18` | Ngưỡng 3/cửa sổ và 60/ngày thành mặc định trong mã, rồi gỡ hai dòng đè trong `.env` |
+
+Lần 3 làm hai bước có chủ ý: deploy mã mới **trước** khi gỡ hai dòng trong
+`.env`. Gỡ trước thì production rơi về mặc định cũ (1 và 20) trong khoảng giữa,
+vì mã đang chạy lúc đó chưa mang số mới. "Mặc định trong mã" và "mã đang chạy"
+là hai thứ khác nhau khi production đi sau repo một commit. Bản `.env` cũ nằm ở
+`.env.bak.before-defaults` trên droplet.
 
 ### Nghiệm thu trên `app.webmcps.net` (sau lần 2)
 
@@ -153,7 +160,26 @@ Hai lần lên production, cách nhau bởi một vòng rà soát mã.
 | Host khả dụng | 1.085 MB |
 | bank-hub (4 container) | 17 / 15 / 18 / 29 MiB — không đổi |
 
-**Đáy RAM khả dụng trong lúc `--build`: 244 MB.** Đây là thời điểm căng nhất của cả quy trình, và là con số cần theo dõi ở lần deploy sau: build chạy `npm ci` + `playwright install` + biên dịch ngay trên máy dùng chung. Nếu số này tụt thấp hơn, cân nhắc dựng ảnh ở nơi khác rồi mới đẩy sang.
+### Đáy RAM khả dụng trong lúc `--build` — con số cần theo dõi
+
+| Lần | Đáy |
+|---|---|
+| 1 | 244 MB |
+| 3 | **217 MB** |
+
+Đây là thời điểm căng nhất của cả quy trình: build chạy `npm ci` +
+`playwright install` + biên dịch **ngay trên máy dùng chung với hệ thống đồng bộ
+ngân hàng**. Quét một site chỉ tốn ~170 MB; dựng ảnh mới là chỗ thật sự nguy
+hiểm.
+
+Hai lần đo cách nhau hơn một giờ và đều không ảnh hưởng bank-hub, nhưng xu hướng
+đi xuống. **Ngưỡng hành động: nếu một lần deploy sau chạm dưới ~150 MB, dừng
+`--build` trên droplet** và chuyển sang dựng ảnh ở nơi khác rồi đẩy sang. Hai
+điểm chưa đủ để gọi là xu hướng thật — ghi lại đáy của mỗi lần deploy để lần thứ
+tư có cơ sở nói.
+
+Đo bằng cách lấy mẫu `free -m` mỗi 4 giây trong lúc `up -d --build` chạy, rồi
+lấy giá trị nhỏ nhất của cột `available`.
 
 ### Câu hỏi treo — trạng thái cuối
 
