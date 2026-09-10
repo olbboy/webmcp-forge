@@ -121,3 +121,46 @@ Bản đầu gộp ba phase một commit, và công tắc runtime chỉ có ở 
 | `--build` trên droplet ép RAM, ảnh hưởng bank-hub | `free -m` tụt trong lúc build | Deploy ngoài cửa sổ đồng bộ; đo `free -m` **trong lúc** build, không chỉ sau |
 | Job kẹt `"scanning"` do deploy giữa lượt quét | Người dùng thấy trang treo, Generate trả 409 | Phase 2 đã thêm hạn cho job `"scanning"`. Kiểm sau deploy |
 | Rule Cloudflare chặn nhầm lưu lượng thật | Khách báo 429 mà log app không thấy request | Rule ở bước 10 là tuỳ chọn, xoá được trong một thao tác. Bỏ qua nếu chưa chắc |
+
+---
+
+## Kết quả triển khai
+
+Hai lần lên production, cách nhau bởi một vòng rà soát mã.
+
+| Lần | Commit | Nội dung |
+|---|---|---|
+| 1 · 2026-09-11 02:1x | `6d0ab34` | Phase 1-3, deploy hai bước: bật với giới hạn tắt, đọc log, rồi bật giới hạn |
+| 2 · 2026-09-11 03:1x | `7ae32e5` | Bốn mục còn lại từ rà soát mã |
+
+### Nghiệm thu trên `app.webmcps.net` (sau lần 2)
+
+| Kiểm | Kết quả |
+|---|---|
+| `127.0.0.1` · `169.254.169.254` · `localtest.me` · `[::1]` · `10.0.0.1` | **400** cả năm |
+| File job sau các lượt dò | **không tăng** — bị từ chối thì không ghi gì |
+| `blvera.com` · `pytesess.vn` | 8/8 trang, tên tool **khớp mốc chính xác** |
+| Giới hạn, hai lượt liền nhau | 429 kèm `retry-after` |
+| Nguồn địa chỉ khách | `cf-connecting-ip` — khoá theo IP thật, không phải xô chung |
+| `app` · `lightpanda` | healthy |
+
+### Bộ nhớ
+
+| | Sau các lượt quét thật |
+|---|---|
+| `app` `memory.current` | 171 MiB / trần 900 |
+| `lightpanda` `memory.current` | 54 MiB / trần 256 |
+| Host khả dụng | 1.085 MB |
+| bank-hub (4 container) | 17 / 15 / 18 / 29 MiB — không đổi |
+
+**Đáy RAM khả dụng trong lúc `--build`: 244 MB.** Đây là thời điểm căng nhất của cả quy trình, và là con số cần theo dõi ở lần deploy sau: build chạy `npm ci` + `playwright install` + biên dịch ngay trên máy dùng chung. Nếu số này tụt thấp hơn, cân nhắc dựng ảnh ở nơi khác rồi mới đẩy sang.
+
+### Câu hỏi treo — trạng thái cuối
+
+| Câu | Kết quả |
+|---|---|
+| `cloudflared` có chuyển tiếp `CF-Connecting-IP` | **CÓ** — log production xác nhận |
+| Mốc bộ tool trước khi sửa | Đã chụp, đã đối chiếu đạt hai lần |
+| Pseudo IPv4 "Overwrite Headers" trên zone | Vẫn treo. Chỉ ảnh hưởng độ chính xác khoá IPv6 |
+| Container có với tới `169.254.169.254` không | Vẫn treo. Không còn quan trọng: dải này bị chặn ở tầng ứng dụng và đã kiểm trên production |
+| Bao nhiêu job đã publish mang `click_by_text` | Vẫn treo. Backfill đã xử lý cả hai ca (khôi phục được / không khôi phục được) nên không còn chặn gì |
