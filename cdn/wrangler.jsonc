@@ -6,17 +6,25 @@
   "compatibility_date": "2026-09-01",
 
   // Serves the beta hostname https://webmcp-forge-cdn.<account>.workers.dev
-  // until a custom domain is attached.
+  // alongside the custom domain below.
   "workers_dev": true,
+
+  // Off because a preview URL keeps an older version of this Worker reachable
+  // with the current secret. A fix to the auth path would otherwise stay
+  // bypassable at the previous version's address.
+  "preview_urls": false,
 
   "kv_namespaces": [
     {
       "binding": "EMBEDS",
-      // Replace after `npx wrangler kv namespace create EMBEDS -c cdn/wrangler.jsonc`.
       // `wrangler dev` and the tests use a local namespace and ignore this id.
-      "id": "replace-with-kv-namespace-id"
+      "id": "1cf2b3f500f44d76be68bc177a1d88ac"
     }
   ],
+
+  // Cloudflare creates the DNS record and certificate for this hostname on
+  // deploy. The workers.dev address keeps working alongside it.
+  "routes": [{ "pattern": "cdn.webmcps.net", "custom_domain": true }],
 
   "observability": { "enabled": true }
 

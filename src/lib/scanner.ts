@@ -1,5 +1,6 @@
 import { chromium, type Browser, type Page } from "playwright";
 import {
+  BROWSER_IDLE_MS,
   MAX_PAGES,
   PAGE_TIMEOUT_MS,
   ROBOTS_TIMEOUT_MS,
@@ -16,6 +17,39 @@ import {
 import type { PageSnapshot, ScanJob, ToolCandidate } from "./types";
 
 let browserPromise: Promise<Browser> | null = null;
+/** Scans in flight. The browser is only a candidate for shutdown at zero. */
+let activeScans = 0;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function idleTimeoutMs(): number {
+  const configured = Number(process.env.BROWSER_IDLE_MS);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : BROWSER_IDLE_MS;
+}
+
+function cancelIdleShutdown(): void {
+  if (!idleTimer) return;
+  clearTimeout(idleTimer);
+  idleTimer = null;
+}
+
+/**
+ * Keeping the browser warm saves a second or two on the next scan, which is
+ * worth it while scans keep arriving. Holding it open forever is not: an idle
+ * browser is several hundred megabytes charged to a machine that has other
+ * work to do.
+ */
+function scheduleIdleShutdown(): void {
+  cancelIdleShutdown();
+  idleTimer = setTimeout(() => {
+    idleTimer = null;
+    // A scan may have started between the timer firing and this callback.
+    if (activeScans === 0) void closeBrowser();
+  }, idleTimeoutMs());
+  // Never a reason to hold the process open on its own.
+  idleTimer.unref?.();
+}
 
 export async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
@@ -28,14 +62,16 @@ export async function getBrowser(): Promise<Browser> {
 }
 
 export async function closeBrowser(): Promise<void> {
-  if (!browserPromise) return;
+  cancelIdleShutdown();
+  const closing = browserPromise;
+  if (!closing) return;
+  // Cleared before the await, not after. A scan starting while the teardown is
+  // in flight must be handed a new browser rather than the one being closed.
+  browserPromise = null;
   try {
-    const browser = await browserPromise;
-    await browser.close();
+    await (await closing).close();
   } catch {
-    /* ignore */
-  } finally {
-    browserPromise = null;
+    /* a browser that will not close is already gone */
   }
 }
 
@@ -80,16 +116,36 @@ export function parseScanUrl(raw: string): URL {
   return url;
 }
 
-export async function scanSite(
-  rawUrl: string,
-  options?: { maxPages?: number; timeoutMs?: number }
-): Promise<{
+type ScanResult = {
   url: string;
   origin: string;
   pages: PageSnapshot[];
   candidates: ToolCandidate[];
   robotsDisallowAll: boolean;
-}> {
+};
+
+/**
+ * Wraps the scan so the browser's lifetime is decided in one place: held open
+ * while work is arriving, closed once nothing has needed it for a while.
+ */
+export async function scanSite(
+  rawUrl: string,
+  options?: { maxPages?: number; timeoutMs?: number }
+): Promise<ScanResult> {
+  activeScans += 1;
+  cancelIdleShutdown();
+  try {
+    return await runScan(rawUrl, options);
+  } finally {
+    activeScans -= 1;
+    if (activeScans === 0) scheduleIdleShutdown();
+  }
+}
+
+async function runScan(
+  rawUrl: string,
+  options?: { maxPages?: number; timeoutMs?: number }
+): Promise<ScanResult> {
   const startUrl = parseScanUrl(rawUrl);
   const origin = startUrl.origin;
   const maxPages = options?.maxPages ?? MAX_PAGES;
