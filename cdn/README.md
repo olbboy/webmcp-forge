@@ -108,8 +108,8 @@ Two things this does not license:
 - The reading came through `wrangler tail`, which consumes the same trace event
   Workers Logs does. Since the runtime offers tail consumers a `getUnredacted()`
   escape hatch, this is strong evidence about stored logs rather than proof.
-  Confirming the stored records needs an API token with observability read,
-  which this project's token does not carry.
+  Reading the stored records would need a token carrying observability read,
+  which was weighed and declined — see [decisions](../docs/decisions.md).
 
 Rotating the token is `wrangler secret put PUBLISH_TOKEN` followed by updating
 `CDN_PUBLISH_TOKEN` in the Forge environment.

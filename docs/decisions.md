@@ -111,6 +111,7 @@ and answered generically.
 | --- | --- |
 | Auth on the write routes | The trust model is that the job id is the capability. Anyone who can construct the request already knows it |
 | Rate limiting reads | The free plan's ceiling is the practical limit for now |
+| Reading the stored log records to confirm redaction | The runtime redacts before the trace event leaves it, and the live stream shows the publish token already gone. Closing the remaining gap would mean issuing a token with observability read purely to check |
 | Pinning the browser image digest | Would freeze security fixes on a fast-moving project |
 | Custom domain for the CDN beyond beta | The hostname may still move; the UI says so |
 | Version history, rotating public ids, R2 | Out of scope for the first release |
