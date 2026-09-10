@@ -89,3 +89,49 @@ Lợi: giảm ~300 MiB RAM cho phần lớn lượt quét, image nhỏ hơn nhi�
 - Nguyên nhân lệch form/search trên demo.vercel.store: khác thời điểm hydrate hay khác cách dựng DOM.
 - Chưa thử site có đăng nhập, có iframe, có shadow DOM.
 - Ghim phiên bản thế nào khi chỉ có nightly.
+
+---
+
+## Telemetry: đã kết luận (10/9/2026 22:15)
+
+Grok đọc source và privacy policy; tôi kiểm lại độc lập bằng cách chạy thật và đọc chính sách.
+
+### Telemetry gửi gì
+
+Privacy policy (cập nhật 3/8/2026) liệt kê rõ hai danh sách:
+
+| Có gửi | **Không** gửi |
+|---|---|
+| timestamp, phiên bản, IP, instance id, kiến trúc CPU, OS, protocol, có TLS không, có proxy không | biến môi trường, đường dẫn file, nội dung file, log, **URL**, cookie, header, **nội dung trang** |
+
+Nguyên văn về cách tắt: *"You can disable both by setting the env var `LIGHTPANDA_DISABLE_TELEMETRY=true`."* — "both" là telemetry **và** crash report.
+
+**Kết luận cho nghiệp vụ:** URL site khách **không** nằm trong payload. Đây là điểm chặn duy nhất, và nó đã được gỡ.
+
+### Cái bẫy: mọi giá trị đều tắt
+
+Tôi chạy thử từng giá trị:
+
+| Đặt | Kết quả |
+|---|---|
+| `"true"` | `disabled=true` |
+| `"false"` | **`disabled=true`** |
+| `"0"` | **`disabled=true`** |
+| `""` (rỗng) | **`disabled=true`** |
+| không đặt biến | `disabled=false` |
+
+Code kiểm **sự tồn tại** của biến, không kiểm giá trị. Ai muốn bật lại telemetry mà viết `=false` sẽ không đạt được điều đó. Compose của ta đặt `"true"`, nên đúng cả khi sau này upstream đổi sang đọc giá trị.
+
+### `LIGHTPANDA_DISABLE_CORE_DUMP` là kênh khác
+
+Nó chỉ đặt `RLIMIT_CORE` về 0, tức không ghi core dump xuống đĩa máy. **Không** thay thế được `DISABLE_TELEMETRY`. Ta đặt cả hai.
+
+### Biến này có tài liệu
+
+Có trong `README.md` của repo và trong privacy policy. Trang `lightpanda.io/docs` thiếu mục riêng, đó là lý do lần đầu tôi tra không thấy. Đây là cam kết công khai, không phải chuỗi tình cờ trong binary.
+
+### Còn lại
+
+`:nightly` là tag di động. Hành vi đã kiểm ứng với digest `sha256:3af0bcae…`. Ghim digest thì tái lập được nhưng đóng băng luôn bản vá; giữ tag di động thì cần đối chiếu lại mỗi lần image đổi. Đã ghi digest vào compose để so sánh.
+
+**Đánh giá:** đủ điều kiện bật Lightpanda cho site khách, với điều kiện biến tắt telemetry có mặt ở mọi nơi chạy và log khởi động xác nhận `disabled=true`.

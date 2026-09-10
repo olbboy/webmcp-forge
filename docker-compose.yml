@@ -42,6 +42,9 @@ services:
   # To use it, set SCANNER_ENGINE=lightpanda and
   # SCANNER_CDP_URL=http://lightpanda:9222 in .env, then recreate the app.
   lightpanda:
+    # A moving tag. Behaviour was verified against
+    # sha256:3af0bcaed8ce2bd5d5919cf28008c0b5fb5074abead8bce9568d04b02628fd14
+    # on 2026-09-10; compare against that when the image changes.
     image: lightpanda/browser:nightly
     profiles: ["lightpanda"]
     restart: unless-stopped
@@ -51,10 +54,13 @@ services:
       # get to phone home about that. Verified against the nightly image: the
       # startup line changes from disabled=false to disabled=true.
       #
-      # The second variable covers the separate crash channel at
-      # crash.lightpanda.io. Neither is documented, so both are worth
-      # re-checking when the image is updated.
+      # The check is for the variable's presence, not its value: "false" and
+      # "" switch telemetry off just as surely as "true" does. Only removing
+      # the line turns it back on. "true" is used anyway, so the meaning still
+      # holds if a later version starts reading the value.
       LIGHTPANDA_DISABLE_TELEMETRY: "true"
+      # Local core dumps only. The upstream privacy policy says the variable
+      # above already covers crash reports sent to crash.lightpanda.io.
       LIGHTPANDA_DISABLE_CORE_DUMP: "true"
     # Measured at 18 MB after four pages and 44 MB after three real sites, so
     # this cap is generous. Chrome needs roughly twenty times as much.
