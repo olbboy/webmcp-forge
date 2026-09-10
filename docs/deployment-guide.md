@@ -1,0 +1,136 @@
+# Deployment guide
+
+What is running in production, how to change it, and what to check afterwards.
+
+## What exists
+
+| Thing | Value |
+| --- | --- |
+| App | `https://app.webmcps.net` |
+| CDN | `https://cdn.webmcps.net`, also `webmcp-forge-cdn.minhdatplus.workers.dev` |
+| Host | DigitalOcean droplet `vtb-vps`, `188.166.228.230`, sgp1, 2 vCPU / 2 GB |
+| Checkout | `/opt/webmcp-forge`, tracks `main` |
+| Worker | `webmcp-forge-cdn` |
+| KV namespace | `webmcp-forge-cdn-EMBEDS`, id `1cf2b3f500f44d76be68bc177a1d88ac` |
+| Tunnel | `webmcp-forge`, id `973b70ad-bb67-4a0f-9504-c4384577d4cc` |
+| Apex `webmcps.net` | **Untouched.** Still two old A records, still not serving |
+
+The droplet also runs an unrelated production service. Nothing here publishes a
+port to the host: a Cloudflare Tunnel reaches the app over the compose network,
+so no inbound port opens and the droplet's address stays out of DNS.
+
+## Environment
+
+Read at runtime, never baked into an image.
+
+| Variable | Meaning |
+| --- | --- |
+| `CDN_BASE_URL` | Worker origin. Empty disables publishing; owners self-host instead |
+| `CDN_PUBLISH_TOKEN` | Must equal the Worker's `PUBLISH_TOKEN` secret |
+| `TUNNEL_TOKEN` | Cloudflare Tunnel credential |
+| `SCANNER_ENGINE` | `chrome` (default) or `lightpanda` |
+| `SCANNER_CDP_URL` | Where Lightpanda listens. `http://127.0.0.1:9222` |
+| `BROWSER_IDLE_MS` | Idle wait before the browser is closed. Default five minutes |
+| `WEBMCP_DATA_DIR` | Job storage. `/data` in the container |
+
+Live values are in `/opt/webmcp-forge/.env` on the droplet, mode 600. A copy
+from before the Lightpanda switch is at `.env.bak.before-lightpanda`.
+
+## Deploying a change
+
+```bash
+ssh vtb-vps
+cd /opt/webmcp-forge
+git fetch origin && git reset --hard origin/main
+npm run cdn:deploy                        # only when cdn/ changed
+docker compose --profile lightpanda up -d --build
+```
+
+Drop `--profile lightpanda` if the browser service is not in use, and drop
+`--build` when only configuration changed.
+
+Then confirm, from anywhere:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://app.webmcps.net/
+```
+
+Recreating the app briefly interrupts it. There is no blue-green step.
+
+## Rolling back
+
+The image is assembled on the droplet, so rolling back means checking out the
+previous commit and repeating the deploy:
+
+```bash
+git reset --hard <previous commit>
+docker compose --profile lightpanda up -d --build
+```
+
+Jobs live in `./data`, a bind mount, and survive both.
+
+## Cloudflare resources
+
+Creating them again from scratch:
+
+```bash
+npx wrangler login
+npx wrangler kv namespace create EMBEDS -c cdn/wrangler.jsonc   # id → wrangler.jsonc
+npx wrangler secret put PUBLISH_TOKEN -c cdn/wrangler.jsonc     # openssl rand -hex 32
+npm run cdn:deploy
+```
+
+The custom domain and its certificate are created by the deploy, from the
+`routes` entry in `cdn/wrangler.jsonc`. Preview URLs are off: they keep an
+older version of the Worker reachable with the current secret, so a fix to the
+token check would stay bypassable at the previous version's address.
+
+## Running with Lightpanda
+
+Optional, behind a compose profile, so a plain `up` leaves it alone.
+
+```bash
+docker compose --profile lightpanda up -d
+docker compose logs lightpanda | grep "telemetry status"   # must say disabled=true
+```
+
+The browser shares the app's network namespace. That is not a style choice: it
+refuses a WebSocket whose `Host` header is an arbitrary name, as protection
+against DNS rebinding, and accepts only an IP or `localhost`. Container IPs are
+not stable, so the app's own loopback is the one address that is both accepted
+and predictable.
+
+The cost is that recreating the app destroys the browser container's network.
+Bring them up together rather than restarting the app alone.
+
+## Limits to keep in view
+
+| Limit | Value |
+| --- | --- |
+| Droplet memory | 2 GB total, plus a 2 GB swapfile at swappiness 10 |
+| App container | 900 MB, 1.5 GB with swap |
+| Lightpanda container | 256 MB |
+| Workers free plan | 100,000 requests a day |
+| KV free plan | 100,000 reads, 1,000 writes a day, one write per second per key |
+| Propagation | About seven minutes for a republish or unpublish to reach visitors |
+
+Chrome costs roughly 350 MB during a scan; Lightpanda about 20 MB. On a shared
+2 GB box that difference is the reason the engine is a choice at all.
+
+## Checks that have earned their place
+
+- `docker compose logs lightpanda | grep "telemetry status"` after any image
+  pull. The tag moves, and the setting that stops the browser reporting on
+  customer sites is undocumented upstream.
+- `free -m` after a deploy. The neighbouring service has no protection beyond
+  the container memory limits.
+- `docker stats` reports the cgroup total, which includes page cache. To see
+  what the app actually holds, read `anon` from the cgroup's `memory.stat`.
+
+## Not done yet
+
+- `data/jobs` has no scheduled backup. A lost droplet is lost jobs.
+- `ufw` is inactive. Nothing here opens a port, so this is unchanged rather
+  than made worse.
+- Whether Cloudflare's Workers Logs redact the `Authorization` header is not
+  established. If they do not, the publish token sits in their logs.
