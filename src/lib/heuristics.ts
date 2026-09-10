@@ -133,7 +133,7 @@ export function proposeTools(
     });
   }
 
-  for (const form of allForms) {
+  for (const { form, selectors: formSelectors } of allForms) {
     if (form.isSearch && form.fields.length <= 2) continue;
     const slug = form.isContact
       ? "contact"
@@ -175,7 +175,8 @@ export function proposeTools(
           },
         },
       },
-      selectors: { form: form.selector },
+      // Every page the form was found on, tried in order by the embed.
+      selectors: { form: formSelectors },
       metadata: {
         fields: form.fields,
         action: form.action,
@@ -269,14 +270,61 @@ function dedupeLinks<T extends { href: string }>(links: T[]): T[] {
   return out;
 }
 
-function dedupeForms(forms: ScannedForm[]): ScannedForm[] {
-  const seen = new Set<string>();
-  const out: ScannedForm[] = [];
-  for (const f of forms) {
-    const key = `${f.selector}|${f.action || ""}|${f.fields.map((x) => x.name).join(",")}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(f);
+/** A form together with every place on the site it was found. */
+type MergedForm = { form: ScannedForm; selectors: string[] };
+
+/**
+ * The same endpoint reached from two pages resolves to two different absolute
+ * URLs, so the path is what identifies it.
+ */
+function actionPath(action: string | undefined): string {
+  if (!action) return "";
+  try {
+    return new URL(action, "http://form.local").pathname;
+  } catch {
+    return action;
   }
-  return out;
+}
+
+/**
+ * What a form does, ignoring where it sits. Method, endpoint, fields and the
+ * intent flags describe the job; the CSS selector describes a position in one
+ * document and belongs nowhere near this.
+ */
+function formIdentity(f: ScannedForm): string {
+  const fields = f.fields
+    .map((x) => `${x.name}:${x.type}`)
+    .sort()
+    .join(",");
+  const intent = `${f.isSearch ? "s" : ""}${f.isContact ? "c" : ""}${f.isCalculator ? "k" : ""}`;
+  return `${(f.method || "get").toLowerCase()}|${actionPath(f.action)}|${fields}|${intent}`;
+}
+
+/**
+ * Collapses a form repeated across pages into one tool.
+ *
+ * The old key included the CSS selector, which is a position in a document, so
+ * an add-to-cart form on eight product pages arrived as eight separate tools
+ * with names like fill_form_form_2_2. Nothing was wrong with the pages; the
+ * key was measuring the wrong thing.
+ *
+ * Every distinct selector is kept rather than discarded. The visitor could be
+ * on any of those pages, and the embed tries each selector in turn, so a
+ * merged tool works everywhere its form appears instead of only where it
+ * happened to be seen first.
+ */
+function dedupeForms(forms: ScannedForm[]): MergedForm[] {
+  const merged = new Map<string, MergedForm>();
+  for (const form of forms) {
+    const key = formIdentity(form);
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, { form, selectors: [form.selector] });
+      continue;
+    }
+    if (!existing.selectors.includes(form.selector)) {
+      existing.selectors.push(form.selector);
+    }
+  }
+  return [...merged.values()];
 }
