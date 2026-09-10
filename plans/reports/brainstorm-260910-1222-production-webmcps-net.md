@@ -123,3 +123,54 @@ Nhánh `chore/cloudflare-production`, commit `88496ce`, **chưa merge**.
 1. **Cloudflare Pages:** không. Pages Functions chạy trên đúng runtime Workers, cùng ràng buộc.
 2. **Cloudflare Worker cho app:** không, trừ khi viết lại. Hai chỗ chặn đã dẫn ở trên.
 3. **Mỗi website khách một Worker riêng:** không, và không nên. Một Worker phục vụ tất cả, mỗi khách là một key KV. Docs Cloudflare: **100 Worker/account gói Free, 500 gói trả phí** — mô hình một-Worker-một-khách chạm trần ở khách thứ 100.
+
+---
+
+## Droplet: grok đã đo thật (10/9/2026)
+
+Nguồn: grok qua `~/agent-mailbox`, inventory read-only trên `vtb-vps`. Số liệu dưới đây do grok đo, **tôi chưa tự SSH kiểm lại** vì đã cam kết không chạy lệnh trên droplet khi chưa có xác nhận của Leo.
+
+| Mục | Giá trị |
+|---|---|
+| Alias / IP | `vtb-vps` / `188.166.228.230` (IPv6 có), sgp1, hostname `accountants`, id 573000555 |
+| SSH | user `root`, key `~/.ssh/vtb_vps_deploy` |
+| OS | Ubuntu 24.04.3 LTS, kernel 6.8 |
+| CPU / RAM | 2 vCPU · **1.9 GiB total, ~1.3 GiB đang dùng, ~678 MiB còn trống, KHÔNG có swap** |
+| Đĩa | 58G, còn trống 45G |
+| Node trên host | **không có** |
+| Docker | có, 29.5.2 |
+| Chrome/Chromium | **không có** |
+| Cổng đang LISTEN | 22 (SSH), 5433 (Postgres container). **Không có 80/443** |
+| UFW | inactive |
+
+Đang chạy trên máy: stack **bank-hub / vtb-sync** ở `/opt/vtb-sync`, up ~3 tháng — `bank-hub-db` (postgres:16), `bank-hub-backend`, `bank-hub-sync-worker`, `bank-hub-tunnel` (cloudflared). Public đi qua **Cloudflare Tunnel**, không phải Caddy (Caddy có trong compose nhưng không chạy).
+
+Hai host còn lại trong `~/.ssh/config`: `10.162.114.28` (IP private), `tpbd-prod` = `146.190.110.222` (droplet tpbd, Dokploy + GlitchTip — grok khuyến cáo không dùng chung).
+
+## Rủi ro chặn: RAM không đủ, và hàng xóm là hệ thống production
+
+Nhu cầu thật của Forge, đọc từ mã nguồn:
+- `src/lib/config.ts:1` — `MAX_PAGES = 8`, scanner mở tới 8 trang mỗi lần quét.
+- `src/lib/scanner.ts:54,103,165` — `chromium.launch` → `newContext` → `newPage`.
+- `next start` production server.
+
+Ước lượng đỉnh: Next.js 150–250 MB + Chromium headless 200–400 MB nền, cộng thêm theo số trang. Tổng khoảng 600 MB đến 1 GB. Chỗ trống hiện có: **678 MiB, không swap**.
+
+Hậu quả nếu vẫn deploy chung: OOM killer của kernel chọn tiến trình theo điểm số, và nó có thể giết `bank-hub-db` hoặc `bank-hub-backend` thay vì giết Chrome. Tức một lần khách quét site có thể làm sập hệ thống đồng bộ ngân hàng đã chạy 3 tháng.
+
+## Ba lựa chọn
+
+| | A. Droplet mới | B. Chung máy + giới hạn bộ nhớ | C. Chung máy, thêm swap |
+|---|---|---|---|
+| Cách làm | Tạo droplet 2–4 GB, compose riêng | Compose riêng + `mem_limit` cứng cho Forge | Thêm 2 GB swap rồi deploy chung |
+| Bảo vệ bank-hub | Hoàn toàn, khác máy | Có: cgroup giết đúng Forge khi vượt | **Không**: OOM vẫn có thể chọn nhầm |
+| Forge chạy được không | Có | Rất chật, ~600 MB cho Chrome + Next → quét dễ fail | Chạy được nhưng Chrome swap cực chậm |
+| Chi phí | +12–24 USD/tháng | 0 | 0 |
+| Khuyến nghị | **Chọn** | Chấp nhận được nếu không muốn tốn thêm | Không nên |
+
+## Chỗ trống cần điền (vòng 2)
+
+1. **Máy nào?** (a) droplet mới 2 GB (~12 USD/tháng) · (b) droplet mới 4 GB (~24 USD/tháng, thoải mái) · (c) chung `vtb-vps` kèm `mem_limit` cứng, chấp nhận quét dễ fail
+2. **Đường public:** (a) thêm hostname vào Cloudflare Tunnel như bank-hub đang làm, không mở cổng nào · (b) A record + Cloudflare proxy + Origin CA
+3. **DNS:** tôi có được tạo `app.webmcps.net` qua Cloudflare API không, sau khi chốt (1) và (2)?
+4. **Tôi có được SSH read-only để tự kiểm lại số liệu của grok không?**
