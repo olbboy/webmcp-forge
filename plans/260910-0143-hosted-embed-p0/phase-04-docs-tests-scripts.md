@@ -1,6 +1,6 @@
 ---
 title: "Phase 4: Docs, E2E, scripts"
-status: todo
+status: completed
 priority: P1
 effort: "4h"
 dependencies: [3]
@@ -14,8 +14,8 @@ E2E xuyên suốt: Forge generate → Worker (harness) phục vụ → Playwrigh
 
 ## Requirements
 
-- [ ] Functional: E2E dùng script tag `src` thật (không inject content) từ URL harness; unpublish → 404; docs mô tả Hosted vs Self-host, CSP, SRI, beta hostname, độ trễ.
-- [ ] Non-functional: E2E không cần internet; tổng `npm test` chạy trong giới hạn `testTimeout` 90 s/case hiện có; không để process harness sống sót sau test.
+- [x] Functional: E2E dùng script tag `src` thật (không inject content) từ URL harness; unpublish → 404; docs mô tả Hosted vs Self-host, CSP, SRI, beta hostname, độ trễ.
+- [x] Non-functional: E2E không cần internet; tổng `npm test` chạy trong giới hạn `testTimeout` 90 s/case hiện có; không để process harness sống sót sau test.
 
 ## Architecture
 
@@ -47,16 +47,16 @@ Lưu ý: trong bước 2 Forge gọi `fetch` thật tới harness (không stub) 
 
 ## Todo
 
-- [ ] `tests/hosted-embed.e2e.test.ts` xanh
-- [ ] `npm test` toàn bộ xanh, không process sót
-- [ ] README / DEMO / cdn/README cập nhật và lệnh đã chạy thử
-- [ ] lint + build
+- [x] `tests/hosted-embed.e2e.test.ts` xanh
+- [x] `npm test` toàn bộ xanh, không process sót
+- [x] README / DEMO / cdn/README cập nhật và lệnh đã chạy thử
+- [x] lint + build
 
 ## Success Criteria
 
-- [ ] `npm test` exit 0; số test = 6 cũ + mới.
-- [ ] E2E chứng minh: URL hosted chứa `pub_`, không chứa `job_`; tools đăng ký từ script tag `src`; unpublish → 404.
-- [ ] README mô tả đúng 2 lựa chọn và hạn chế beta; DEMO curl chạy được.
+- [x] `npm test` exit 0; số test = 6 cũ + mới.
+- [x] E2E chứng minh: URL hosted chứa `pub_`, không chứa `job_`; tools đăng ký từ script tag `src`; unpublish → 404.
+- [x] README mô tả đúng 2 lựa chọn và hạn chế beta; DEMO curl chạy được.
 
 ## Risk Assessment
 
