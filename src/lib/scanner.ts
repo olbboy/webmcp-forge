@@ -1,11 +1,14 @@
 import { chromium, type Browser, type Page } from "playwright";
 import {
   BROWSER_IDLE_MS,
+  DEFAULT_SCANNER_CDP_URL,
+  DEFAULT_SCANNER_ENGINE,
   MAX_PAGES,
   PAGE_TIMEOUT_MS,
   ROBOTS_TIMEOUT_MS,
   SCAN_TIMEOUT_MS,
   USER_AGENT,
+  type ScannerEngine,
 } from "./config";
 import { extractSnapshotInPage } from "./extract";
 import { proposeTools } from "./heuristics";
@@ -75,7 +78,43 @@ export async function closeBrowser(): Promise<void> {
   }
 }
 
+/**
+ * Reads the configured engine. An unknown value is rejected rather than
+ * quietly falling back, because silently scanning with the wrong browser is
+ * harder to notice than a startup error.
+ */
+export function selectedEngine(): ScannerEngine {
+  const raw = process.env.SCANNER_ENGINE?.trim().toLowerCase();
+  if (!raw) return DEFAULT_SCANNER_ENGINE;
+  if (raw === "chrome" || raw === "lightpanda") return raw;
+  throw new Error(
+    `Unknown SCANNER_ENGINE "${raw}". Expected "chrome" or "lightpanda".`
+  );
+}
+
+function cdpUrl(): string {
+  return process.env.SCANNER_CDP_URL?.trim() || DEFAULT_SCANNER_CDP_URL;
+}
+
+async function connectToLightpanda(): Promise<Browser> {
+  const url = cdpUrl();
+  try {
+    return await chromium.connectOverCDP(url);
+  } catch (err) {
+    // Being unable to reach the server is a deployment problem, not a problem
+    // with the site being scanned. Name the address so it is obvious which.
+    const detail = err instanceof Error ? err.message.split("\n")[0] : String(err);
+    throw new Error(`Lightpanda is not reachable at ${url}: ${detail}`);
+  }
+}
+
 async function launchBrowser(): Promise<Browser> {
+  return selectedEngine() === "lightpanda"
+    ? connectToLightpanda()
+    : launchChrome();
+}
+
+async function launchChrome(): Promise<Browser> {
   const args = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
