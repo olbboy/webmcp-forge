@@ -174,3 +174,52 @@ Hậu quả nếu vẫn deploy chung: OOM killer của kernel chọn tiến trì
 2. **Đường public:** (a) thêm hostname vào Cloudflare Tunnel như bank-hub đang làm, không mở cổng nào · (b) A record + Cloudflare proxy + Origin CA
 3. **DNS:** tôi có được tạo `app.webmcps.net` qua Cloudflare API không, sau khi chốt (1) và (2)?
 4. **Tôi có được SSH read-only để tự kiểm lại số liệu của grok không?**
+
+---
+
+## Tôi tự SSH đo (Leo duyệt câu 4), 10/9/2026 06:24 UTC
+
+Chỉ lệnh đọc, không đổi gì trên droplet.
+
+| Mục | Đo được |
+|---|---|
+| RAM | 1967 MiB tổng · 1298 dùng · **669 available** · swap 0 |
+| `bank-hub-sync-worker` | **478 MiB / giới hạn 1 GiB** (compose đã có `deploy.resources.limits: cpus 1.0, memory 1G`) |
+| `bank-hub-backend` | 94 MiB |
+| `bank-hub-db` | 48 MiB |
+| `bank-hub-tunnel` | 20 MiB |
+| Uptime host | 108 ngày, load 0.07 |
+
+### Giả định "1 ngày chạy 1 lần" KHÔNG đúng với thực tế đang chạy
+
+- Có **4 tiến trình chromium** thuộc cgroup `docker-3aff3bf047bc` = `bank-hub-sync-worker`.
+- Tuổi tiến trình chromium: **10 giờ 24 phút**, khởi động ~02:59 giờ Sài Gòn, **vẫn đang sống**.
+- Log worker mới nhất lúc 12:56–12:57 giờ Sài Gòn, tức ~28 phút trước lúc đo, **không phải 01:00**.
+- Log ghi `backoff → currentIntervalMs=1800000` → đang lặp mỗi **30 phút**.
+- Container `Up 3 months`: bản có lịch 01:00 nhiều khả năng **chưa được deploy**.
+
+### Bank-hub đang lỗi (ngoài phạm vi việc này, nhưng Leo cần biết)
+
+Log lặp lại nhiều lần:
+- `VietinbankLogin: signIn → 400 [BLOCK_IPAY_WEB]`
+- `still on /login after cycle 2 — captcha likely wrong`
+- `SyncWorkerService: tick error`
+
+### Kết luận cho câu hỏi "có giới hạn resource được không"
+
+Cơ chế thì được, và đã có sẵn trên máy này (sync-worker đang chạy với `memory: 1G`). Vấn đề là **con số**:
+
+| | Cần | Có |
+|---|---|---|
+| Next.js production | 150–250 MiB | |
+| Chromium quét 8 trang (`MAX_PAGES=8`) | 400–600 MiB | |
+| **Tổng đỉnh** | **600–850 MiB** | **669 MiB available** |
+
+Đặt `mem_limit` vừa với chỗ trống (~500 MiB) thì Forge tự OOM ở phần lớn lượt quét → khách thấy tính năng hỏng. Đặt cao hơn thì tranh RAM với bank-hub.
+
+**Điểm mở**: nếu `bank-hub-sync-worker` đóng browser sau mỗi lượt thay vì giữ 10 tiếng, khoảng 400 MiB được trả lại, và lúc đó Forge vừa vặn thoải mái. Đây là sửa ở bank-hub, không phải ở Forge.
+
+## Chỗ trống cần điền (vòng 3)
+
+1. (a) Sửa bank-hub đóng browser sau mỗi lượt, rồi mới deploy Forge chung máy · (b) droplet mới 2 GB (~12 USD/tháng), không đụng bank-hub · (c) vẫn deploy chung ngay với `mem_limit` 500 MiB, chấp nhận quét hay hỏng · (d) thêm 2 GB swap làm đệm rồi deploy chung
+2. Bank-hub đang lỗi đăng nhập Vietinbank — có muốn tôi xem riêng không, hay để đó?
