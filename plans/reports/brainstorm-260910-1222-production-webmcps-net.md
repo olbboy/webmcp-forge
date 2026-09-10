@@ -2,7 +2,7 @@
 type: brainstorm
 date: 2026-09-10
 slug: production-webmcps-net
-status: phần CDN đã live; còn chờ quyết định nơi chạy app Forge
+status: LIVE — app.webmcps.net và cdn.webmcps.net đều chạy
 ---
 
 # Brainstorm: đưa WebMCP Forge lên production tại webmcps.net
@@ -276,3 +276,61 @@ Chạy được ngay bây giờ với `mem_limit` khoảng 700 MiB, thỉnh tho�
 
 1. **Restart dockerd để thu ~450 MiB?** Cần cửa sổ bảo trì vì `LiveRestore=false`. Lưu ý `bank-hub-db` có `restart=no` nên phải `docker compose up -d` lại bằng tay. (a) làm ngay · (b) làm lúc khác · (c) bỏ qua, chạy với 761 MiB + swap
 2. **Log 3,7 GB và `restart=no` của bank-hub-db** — tôi sửa giúp (thêm `daemon.json` log rotation + đổi restart policy), hay để anh tự?
+
+---
+
+## LIVE (10/9/2026 16:50)
+
+### Đã dựng
+
+| Thành phần | Giá trị |
+|---|---|
+| App | `https://app.webmcps.net` — HTTP 200, TLS hợp lệ |
+| CDN | `https://cdn.webmcps.net` — Worker + KV |
+| Máy | droplet `vtb-vps`, `/opt/webmcp-forge`, nhánh `chore/cloudflare-production` @ `5b93c06` |
+| Container | `webmcp-forge-app-1` (healthy), `webmcp-forge-tunnel-1` |
+| Tunnel | `webmcp-forge`, id `973b70ad-…`, 4 kết nối, ingress `app.webmcps.net → http://app:43127` |
+| DNS | CNAME `app` → `973b70ad-….cfargotunnel.com`, proxied |
+| Apex | **không đụng** — vẫn 2 record A cũ, vẫn timeout như trước |
+| Cổng mở thêm trên host | **không có** — tunnel đi ra, không có inbound |
+| Giới hạn | app `mem_limit 900m` / `memswap 1500m` / `cpus 1.0` / `shm_size 256m`; tunnel `128m` |
+| Đĩa | image 6,4 GB; còn trống 37 GB |
+
+### Kiểm chứng toàn trình trên production
+
+| Bước | Kết quả |
+|---|---|
+| Quét demo shop qua API công khai | job tạo được, 11 tool |
+| Generate | `publishStatus: published`, version 1, `publicId` khớp `pub_[a-f0-9]{32}` |
+| Snippet | `https://cdn.webmcps.net/e/pub_…/embed.js`, không chứa jobId |
+| GET file hosted | 200, 22.216 byte, ETag `"1"`, `max-age=300`, nosniff |
+| Unpublish | 404 ngay sau đó |
+| Job thử | **đã gỡ**, CDN production sạch |
+
+### Bộ nhớ sau một lượt quét thật
+
+| | |
+|---|---|
+| `webmcp-forge-app-1` | 490 MiB / giới hạn 900 |
+| `webmcp-forge-tunnel-1` | 27 MiB / 128 |
+| bank-hub (4 container) | ~92 MiB tổng, **không bị ảnh hưởng** |
+| RAM khả dụng | 1.237 MiB |
+| Swap dùng | 160 MiB |
+
+### Forge cũng giữ Chrome thường trú — cùng vấn đề với bank-hub
+
+`src/lib/scanner.ts:18` giữ `browserPromise` ở cấp module. `closeBrowser()` có tồn tại nhưng **chỉ test gọi**, đường production không bao giờ gọi. Sau một lượt quét còn **8 tiến trình chrome** trong cgroup của `webmcp-forge-app-1`, và container đứng ở 490 MiB thay vì tụt về ~110 MiB.
+
+Khác biệt với bank-hub: đây là lựa chọn có chủ đích (giữ browser ấm để lượt quét sau nhanh hơn 1–3 giây), và giờ đã bị chặn bởi `mem_limit` nên không thể hại hàng xóm. Nhưng nếu lưu lượng thấp thì vẫn là 380 MiB giữ không công, y hệt bank-hub trước đây.
+
+## Chỗ trống cần điền (vòng 5)
+
+1. **Chrome thường trú:** (a) để nguyên, đánh đổi lấy tốc độ · (b) đóng browser sau N phút rảnh — cần sửa `scanner.ts`, là thay đổi code chứ không phải hạ tầng
+2. **Nhánh:** droplet đang bám `chore/cloudflare-production`. Nên merge vào `main` rồi cho droplet bám `main` như bank-hub không?
+3. **`ufw` vẫn tắt** (grok nêu, tôi chưa đụng). Forge không mở cổng nào nên không làm tình hình xấu đi. Có muốn bật không?
+
+## Câu hỏi chưa giải quyết (còn từ trước)
+
+- Workers Logs có che header `Authorization` không → publish token có thể nằm trong log Cloudflare.
+- Vì sao dockerd phình 443 MiB. Giả thuyết "Chrome spawn mỗi 30 phút" của tôi **sai** — Chrome chỉ khởi động ~1 lần/ngày rồi nằm im. Nguyên nhân gốc chưa rõ; nên đo lại sau 2–4 tuần.
+- `data/jobs` là bind mount `/opt/webmcp-forge/data`, chưa có sao lưu định kỳ.
