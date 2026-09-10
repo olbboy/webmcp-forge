@@ -10,6 +10,12 @@ services:
     build: .
     image: webmcp-forge:local
     restart: unless-stopped
+    # Chrome leaves child processes behind when it exits, and `npm start` as
+    # PID 1 never reaps them. They cost no memory but do hold PID table
+    # entries, so they accumulate across scans. This puts a real init process
+    # at PID 1 to collect them, and it forwards signals so `docker stop` shuts
+    # the server down cleanly instead of killing it.
+    init: true
     env_file: .env
     volumes:
       # Job JSON lives here. Bind mount rather than a named volume so a backup
