@@ -264,3 +264,45 @@ describe("the scan route", () => {
     }
   });
 });
+
+describe("the shipped defaults", () => {
+  it("allow three in a window and sixty in a day", () => {
+    // Read from the code rather than set here, so a change to the defaults has
+    // to come past this test rather than through it.
+    for (const key of [
+      "SCAN_RATE_MAX_PER_WINDOW",
+      "SCAN_RATE_MAX_PER_DAY",
+      "SCAN_RATE_WINDOW_MS",
+    ]) {
+      delete process.env[key];
+    }
+
+    expect(takeSlot("203.0.113.7").ok).toBe(true);
+    expect(takeSlot("203.0.113.7").ok).toBe(true);
+    expect(takeSlot("203.0.113.7").ok).toBe(true);
+    // A mistyped URL spends its allowance like any other request, so the
+    // fourth attempt inside the window is the one that waits.
+    const fourth = takeSlot("203.0.113.7");
+    expect(fourth.ok).toBe(false);
+    if (!fourth.ok) {
+      expect(fourth.retryAfterSeconds).toBeGreaterThan(0);
+      expect(
+        fourth.retryAfterSeconds,
+        "a window refusal is seconds away, not hours"
+      ).toBeLessThanOrEqual(30);
+    }
+  });
+
+  it("say which ceiling was hit through Retry-After", () => {
+    delete process.env.SCAN_RATE_WINDOW_MS;
+    process.env.SCAN_RATE_MAX_PER_WINDOW = "1000";
+    process.env.SCAN_RATE_MAX_PER_DAY = "1";
+
+    expect(takeSlot("198.51.100.9").ok).toBe(true);
+    const refused = takeSlot("198.51.100.9");
+    expect(refused.ok).toBe(false);
+    // The daily bucket runs to midnight UTC, so its refusal is far longer than
+    // a window's — which is how an operator tells the two apart from outside.
+    if (!refused.ok) expect(refused.retryAfterSeconds).toBeGreaterThan(60);
+  });
+});

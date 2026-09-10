@@ -20,9 +20,16 @@ function envInt(name: string, fallback: number): number {
 
 // Read per call rather than captured at import, so the deployed thresholds can
 // be changed with a restart instead of a rebuild — and so tests can move them.
+//
+// Three scans in half a minute and sixty in a day is what a person actually
+// does: paste a URL, look at the tools, change something, scan again. The
+// numbers started at one and twenty, which turned out to refuse the second
+// attempt after a typo — a refused request spends its allowance too, which is
+// deliberate against probing and unkind to someone who mistyped. Sixty a day
+// keeps that from simply moving the wall three minutes further out.
 const windowMs = () => envInt("SCAN_RATE_WINDOW_MS", 30_000);
-const maxPerWindow = () => envInt("SCAN_RATE_MAX_PER_WINDOW", 1);
-const maxPerDay = () => envInt("SCAN_RATE_MAX_PER_DAY", 20);
+const maxPerWindow = () => envInt("SCAN_RATE_MAX_PER_WINDOW", 3);
+const maxPerDay = () => envInt("SCAN_RATE_MAX_PER_DAY", 60);
 /**
  * When the client address cannot be determined every caller shares one bucket,
  * so that bucket gets its own, roomier ceiling. Sized like a per-IP limit it

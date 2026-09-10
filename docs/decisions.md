@@ -216,6 +216,22 @@ claims to be read-only can do whatever it likes. So they are labelling, not
 enforcement, and every gate that actually stops something lives in the embed's
 own code.
 
+## The limits are three a minute-ish, not one
+
+One scan per thirty seconds was the safe opening bid, and it was wrong by a
+little in a way that only shows in use: a refused request spends its allowance
+too — deliberately, so the endpoint cannot be probed for free — which meant a
+mistyped URL cost you the next half minute as well.
+
+Three in a window covers the way the tool is actually used: paste a URL, read
+the tools, change something, try again. Sixty a day is the same adjustment
+carried through, because three a window against a ceiling of twenty just moves
+the wall from thirty seconds to three minutes.
+
+A 429 says which limit it was. `Retry-After` of about thirty seconds is the
+window; thousands of seconds is the daily ceiling, counting down to midnight
+UTC.
+
 ## A full counter map refuses rather than evicts
 
 The per-address counters live in a bounded map, and something has to give when

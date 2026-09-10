@@ -34,8 +34,8 @@ Read at runtime, never baked into an image.
 | `BROWSER_ACQUIRE_TIMEOUT_MS` | How long to wait for a browser before giving up. Default 20000 |
 | `WEBMCP_DATA_DIR` | Job storage. `/data` in the container |
 | `SCAN_RATE_WINDOW_MS` | Rate-limit window. Default 30000 |
-| `SCAN_RATE_MAX_PER_WINDOW` | Scans per address per window. Default 1 |
-| `SCAN_RATE_MAX_PER_DAY` | Scans per address per UTC day. Default 20 |
+| `SCAN_RATE_MAX_PER_WINDOW` | Scans per address per window. Default 3 |
+| `SCAN_RATE_MAX_PER_DAY` | Scans per address per UTC day. Default 60. A 429 carrying a `Retry-After` of thousands of seconds is this one; around thirty seconds is the window above |
 | `SCAN_RATE_UNKNOWN_PER_DAY` | Ceiling for callers whose address could not be read, shared by all of them. Default 200 |
 | `SCAN_MAX_CONCURRENT` | Scans running at once. Default 1; raise only against a measurement of that many in parallel |
 | `SCAN_RATE_MAP_MAX` | How many distinct callers each counter map holds. Default 20000. Once full of live counters, new callers are refused rather than evicted — evicting is how a caller clears their own count |
