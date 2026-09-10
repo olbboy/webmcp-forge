@@ -60,6 +60,30 @@ npm start
 
 Jobs are anonymous JSON files under `data/jobs/` (no accounts, no paid database).
 
+### Optional: a lighter browser
+
+The scanner drives Chrome by default. It can drive
+[Lightpanda](https://github.com/lightpanda-io/browser) instead, which uses
+roughly a twentieth of the memory because it has no rendering engine. The
+scanner never needed one: it only reads the DOM.
+
+```bash
+docker compose --profile lightpanda up -d
+```
+
+Then set these and recreate the app:
+
+```
+SCANNER_ENGINE=lightpanda
+SCANNER_CDP_URL=http://lightpanda:9222
+```
+
+Measured on the demo shop and three real sites, both engines proposed the same
+tools. Chrome stays the default because Lightpanda ships only nightly builds,
+and one real single-page app produced a small difference in what each engine
+saw. Details and numbers are in
+`plans/reports/research-260910-2125-lightpanda-thay-chrome.md`.
+
 ### Optional: hosting for your users
 
 Without the two settings below, everything still works and site owners use the

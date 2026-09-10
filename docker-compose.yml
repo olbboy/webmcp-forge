@@ -36,6 +36,19 @@ services:
       start_period: 40s
       retries: 3
 
+  # Off unless asked for: `docker compose --profile lightpanda up -d`.
+  # A plain `up` leaves it alone, so the default deployment is unchanged.
+  #
+  # To use it, set SCANNER_ENGINE=lightpanda and
+  # SCANNER_CDP_URL=http://lightpanda:9222 in .env, then recreate the app.
+  lightpanda:
+    image: lightpanda/browser:nightly
+    profiles: ["lightpanda"]
+    restart: unless-stopped
+    # Measured at 18 MB after four pages and 44 MB after three real sites, so
+    # this cap is generous. Chrome needs roughly twenty times as much.
+    mem_limit: 256m
+
   tunnel:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
