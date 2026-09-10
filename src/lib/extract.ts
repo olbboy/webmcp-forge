@@ -202,27 +202,35 @@ export function extractSnapshotInPage(): Omit<PageSnapshot, "url"> {
   });
 
   const buttons: ButtonHit[] = [];
+  const collectClickable = (el: Element) => {
+    const text = (
+      (el as HTMLInputElement).value ||
+      el.textContent ||
+      el.getAttribute("aria-label") ||
+      ""
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text) return;
+    buttons.push({
+      text: text.slice(0, 80),
+      selector: selectorFor(el),
+      ariaLabel: el.getAttribute("aria-label") || undefined,
+      type: el.getAttribute("type") || undefined,
+    });
+  };
+
+  // Buttons first, links second. Both are clickable and both belong here — the
+  // tool that acts on this list has always matched anchors too, so leaving them
+  // out would let it refuse "Checkout" on a storefront that renders it as one.
+  // Order matters because the list is capped: a page with eighty links would
+  // otherwise push its real buttons off the end.
   document
     .querySelectorAll(
       'button, [role="button"], input[type="submit"], input[type="button"]'
     )
-    .forEach((el) => {
-      const text = (
-        (el as HTMLInputElement).value ||
-        el.textContent ||
-        el.getAttribute("aria-label") ||
-        ""
-      )
-        .replace(/\s+/g, " ")
-        .trim();
-      if (!text) return;
-      buttons.push({
-        text: text.slice(0, 80),
-        selector: selectorFor(el),
-        ariaLabel: el.getAttribute("aria-label") || undefined,
-        type: el.getAttribute("type") || undefined,
-      });
-    });
+    .forEach(collectClickable);
+  document.querySelectorAll("a[href]").forEach(collectClickable);
 
   const products: ProductCard[] = [];
   const productNodes = Array.from(

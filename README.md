@@ -37,7 +37,9 @@ Optional Cursor / Claude Desktop: check **local-relay** before generate, or add:
 <script src="https://cdn.jsdelivr.net/npm/@mcp-b/webmcp-local-relay@latest/dist/browser/embed.js"></script>
 ```
 
-Native Chrome and `@mcp-b/webmcp-polyfill` both work. Forms never submit unless the agent passes `dryRun: false` **and** `confirmSubmit: true`.
+Native Chrome and `@mcp-b/webmcp-polyfill` both work. Forms never submit unless the agent passes `dryRun: false` **and** `confirmSubmit: true`, and `click_by_text` presses only labels the scan actually found — an exact match against that list, nothing else.
+
+Each tool also carries the WebMCP safety hints (`readOnlyHint`, `consequentialHint`, `untrustedContentHint`) so a client can show a visitor what it is about to do. They are labels; the checks that stop anything are in the embed itself.
 
 ## Run locally
 

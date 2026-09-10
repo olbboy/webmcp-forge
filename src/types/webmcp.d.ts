@@ -1,10 +1,23 @@
 export {};
 
+/**
+ * The three hints the WebMCP draft defines. They are not MCP's set — only
+ * `readOnlyHint` appears in both — and they are advice to the client, not a
+ * guarantee the tool honours. The gate that actually stops a click is in the
+ * embed's own code.
+ */
+type WebMcpToolAnnotations = {
+  readOnlyHint?: boolean;
+  untrustedContentHint?: boolean;
+  consequentialHint?: boolean;
+};
+
 type WebMcpToolInfo = {
   name: string;
   title?: string;
   description?: string;
   inputSchema?: unknown;
+  annotations?: WebMcpToolAnnotations;
   origin?: string;
   window?: Window;
 };
@@ -15,6 +28,7 @@ type WebMcpContext = EventTarget & {
       name: string;
       description: string;
       inputSchema?: unknown;
+      annotations?: WebMcpToolAnnotations;
       execute: (args: Record<string, unknown>) => unknown;
     },
     options?: { signal?: AbortSignal }

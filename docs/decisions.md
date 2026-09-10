@@ -166,6 +166,42 @@ The concurrency ceiling is checked before the per-address allowance. A caller
 turned away because the box is busy has not had a scan, and should not be
 charged for one.
 
+## An agent may press what the scan saw, and nothing else
+
+`click_by_text` matched any substring against every clickable element on the
+page, and pressed the first hit. "delete" reached "Delete account"; "buy"
+reached "Buy now". Beside it, the form tool needed two separate flags before it
+would submit. Same bundle, two different standards.
+
+It now carries the labels found during the scan and accepts an exact match
+against that list, then locates the element by the list entry rather than by the
+caller's string — looking it up by what the caller sent would leave the check
+decorative. Substring matching is gone entirely: kept as a fallback it would
+reproduce the original defect inside a shorter list. A page with nothing to
+press gets no tool at all.
+
+The list gathers buttons first and links second, because both have always been
+clickable at call time and the list is capped: a page with eighty links would
+otherwise push its real buttons off the end.
+
+A job scanned before any of this existed has no list, and bundles are rebuilt
+from the candidates stored on the job. Missing is therefore treated differently
+from empty — missing means an older scan, and the labels are recovered from the
+pages that job already holds.
+
+## Safety hints are sent, and are not the safety
+
+The tools carried a `readOnlyHint` that never left the manifest: the embed
+registered name, description, schema and function, and dropped the rest. They
+are passed through now, using the WebMCP draft's own vocabulary —
+`readOnlyHint`, `untrustedContentHint`, `consequentialHint` — which is not MCP's
+set. Only the first name appears in both.
+
+They are advice to the client, and clients honour them unevenly; a tool that
+claims to be read-only can do whatever it likes. So they are labelling, not
+enforcement, and every gate that actually stops something lives in the embed's
+own code.
+
 ## Things deliberately not done
 
 | Not done | Why |

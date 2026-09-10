@@ -1,4 +1,5 @@
 import { LOCAL_RELAY_SRC } from "./config";
+import { clickableAllowlist } from "./heuristics";
 import { sanitizeToolName } from "./names";
 import type {
   EmbedManifest,
@@ -29,13 +30,45 @@ export function applySelection(
     if (!base) continue;
     const name = sanitizeToolName(sel.name || base.name, used);
     out.push({
-      ...base,
+      ...withClickAllowlist(base, job),
       name,
       description: (sel.description || base.description).trim() || base.description,
       enabled: true,
     });
   }
   return out;
+}
+
+/**
+ * Fills in the click allowlist for a tool scanned before allowlists existed.
+ *
+ * A bundle is rebuilt from the candidates stored on the job, so without this
+ * every job scanned before this change would come back with an empty list and
+ * a click tool that refuses everything — including the copies already live on
+ * customer sites, which are rebuilt at the same version number the CDN uses as
+ * its cache validator.
+ *
+ * Missing and empty are different answers. Missing means an older scan that
+ * never recorded one, and the labels are recovered from the pages the job
+ * already holds. Empty means a scan that looked and found no controls.
+ */
+function withClickAllowlist(tool: ToolCandidate, job: ScanJob): ToolCandidate {
+  if (tool.kind !== "click_by_text") return tool;
+  if (tool.metadata?.allowlist !== undefined) return tool;
+
+  const allowlist = clickableAllowlist(job.pages ?? []);
+  return {
+    ...tool,
+    metadata: {
+      ...tool.metadata,
+      allowlist,
+      annotations: {
+        ...((tool.metadata?.annotations as Record<string, unknown>) ?? {}),
+        consequentialHint: true,
+        untrustedContentHint: true,
+      },
+    },
+  };
 }
 
 export function buildManifest(
@@ -142,6 +175,7 @@ const EMBED_RUNTIME_BODY = `
               title: t.title || t.name,
               description: t.description,
               inputSchema: t.inputSchema || { type: "object", properties: {} },
+              annotations: t.annotations || {},
               origin: location.origin,
               window: window
             };
@@ -225,6 +259,10 @@ const EMBED_RUNTIME_BODY = `
     }
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function norm(value) {
+    return String(value == null ? "" : value).replace(/\\s+/g, " ").trim().toLowerCase();
   }
 
   function wrap(data) {
@@ -341,16 +379,29 @@ const EMBED_RUNTIME_BODY = `
         return wrap({ ok: true, query: args.query, submitted: submittedSearch, value: input.value });
       }
       case "click_by_text": {
-        var needle = String(args.text || "").trim().toLowerCase();
-        if (!needle) return wrap({ ok: false, error: "text is required" });
+        var allowed = (tool.metadata && tool.metadata.allowlist) || [];
+        var needle = norm(args.text);
+        if (!needle) return wrap({ ok: false, error: "text is required", allowlist: allowed });
+        // Exact match against the list only. Substring matching is what let
+        // "delete" reach "Delete account", and narrowing it to the list without
+        // dropping it would just make the same mistake out of forty options.
+        var hits = allowed.filter(function (label) { return norm(label) === needle; });
+        if (hits.length === 0) {
+          return wrap({ ok: false, error: "text is not in the allowlist", text: args.text, allowlist: allowed });
+        }
+        if (hits.length > 1) {
+          return wrap({ ok: false, error: "text matches more than one control", matches: hits });
+        }
+        var wanted = norm(hits[0]);
         var nodes = Array.prototype.slice.call(
           document.querySelectorAll('a, button, [role="button"], input[type="submit"], input[type="button"]')
         );
+        // Located by the allowlist entry, never by the caller's string. Looking
+        // it up by args.text would leave the check decorative.
         var match = nodes.find(function (el) {
-          var t = ((el.textContent || el.value || el.getAttribute("aria-label") || "")).replace(/\\s+/g, " ").trim().toLowerCase();
-          return t === needle || t.indexOf(needle) !== -1;
+          return norm(el.textContent || el.value || el.getAttribute("aria-label") || "") === wanted;
         });
-        if (!match) return wrap({ ok: false, error: "No clickable element matching text", text: args.text });
+        if (!match) return wrap({ ok: false, error: "That control is not on this page right now", text: hits[0] });
         match.click();
         return wrap({
           ok: true,
@@ -401,6 +452,7 @@ const EMBED_RUNTIME_BODY = `
             name: tool.name,
             description: tool.description,
             inputSchema: tool.inputSchema || { type: "object", properties: {} },
+            annotations: (tool.metadata && tool.metadata.annotations) || undefined,
             execute: function (input) { return executeImpl(tool, input); }
           }).then(function () {
             console.log("[WebMCP Forge] registered:", tool.name);
