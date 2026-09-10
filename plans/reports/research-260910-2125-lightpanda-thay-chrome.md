@@ -53,7 +53,24 @@ Cùng danh sách: `get_page_info, get_site_nav, list_links, list_products, searc
 1. **Bản nightly.** `1.0.0-nightly.9309+33ddbdf0f`. Không có tag ổn định để ghim.
 2. **Lệch DOM trên SPA thật.** demo.vercel.store cho 2 form/2 search thay vì 1. Hậu quả: sinh thừa một tool trùng. Không sai kết quả, nhưng chứng minh hai engine **không** luôn cho DOM giống nhau.
 3. **Không có trang "known issues".** Docs không liệt kê giới hạn hay API không hỗ trợ. Vắng tài liệu không phải là bằng chứng không có vấn đề.
-4. **Telemetry bật mặc định.** Log khởi động: `telemetry status disabled=false`. `serve --help` **không** thấy cờ tắt (chỉ có `--obey-robots`). Ta quét site của khách, nên cần biết cái gì được gửi đi đâu. **Chưa giải quyết được.**
+4. **Telemetry bật mặc định — ĐÃ TẮT ĐƯỢC (cập nhật 10/9 22:10).**
+
+   Lần đầu tôi kết luận "không có cờ tắt". Sai, vì hai lỗi tìm kiếm của chính tôi:
+   - Grep chữ `telemetry` trong `--help`, nhưng cờ liên quan dùng chữ `metrics`.
+   - Dò binary bằng `strings`, mà image **không cài `strings`** nên lệnh trả rỗng và tôi tưởng là "không có gì".
+
+   Làm lại bằng `grep -a` trực tiếp trên `/bin/lightpanda`:
+
+   | Phát hiện | Giá trị |
+   |---|---|
+   | Biến tắt telemetry | `LIGHTPANDA_DISABLE_TELEMETRY` |
+   | Biến tắt crash dump | `LIGHTPANDA_DISABLE_CORE_DUMP` |
+   | Đích gửi | `telemetry.lightpanda.io`, `crash.lightpanda.io` |
+   | `--disable-metrics` | **KHÔNG** liên quan — chỉ tắt endpoint `/metrics` Prometheus cục bộ |
+
+   Chạy thử xác nhận: đặt `LIGHTPANDA_DISABLE_TELEMETRY=true` thì log đổi từ `disabled=false` sang `disabled=true`.
+
+   Cả hai biến **không có trong docs**, nên có thể đổi ở nightly sau mà không ai báo.
 5. **Đổi kiến trúc.** Đang launch trong tiến trình; chuyển sang connect CDP tới container riêng. Cơ chế đóng browser khi rảnh vừa làm ở PR #2 sẽ không còn ý nghĩa như cũ.
 
 ## Hướng đề xuất
