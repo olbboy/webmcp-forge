@@ -78,6 +78,19 @@ SCANNER_ENGINE=lightpanda
 SCANNER_CDP_URL=http://lightpanda:9222
 ```
 
+Lightpanda reports to its makers unless told otherwise, and the compose file
+tells it otherwise. The image tag moves, so confirm that setting still takes
+after any pull:
+
+```bash
+docker compose logs lightpanda | grep "telemetry status"
+```
+
+It must say `disabled=true`. If it says `disabled=false`, the image has changed
+how it reads that setting; stop and check before scanning anything that is not
+yours. The upstream privacy policy says URLs and page content are never sent,
+which is why this is a check rather than a blocker.
+
 Measured on the demo shop and three real sites, both engines proposed the same
 tools. Chrome stays the default because Lightpanda ships only nightly builds,
 and one real single-page app produced a small difference in what each engine
