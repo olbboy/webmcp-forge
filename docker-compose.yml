@@ -48,31 +48,24 @@ services:
     image: lightpanda/browser:nightly
     profiles: ["lightpanda"]
     restart: unless-stopped
-    # Playwright asks /json/version where to open its WebSocket and then
-    # believes the answer. Bound to a wildcard, Lightpanda answers
-    # ws://127.0.0.1:9222, which sends the app to its own loopback where
-    # nothing listens. Advertising the service name gives the app an address
-    # that means something on the compose network.
-    command:
-      - /bin/lightpanda
-      - serve
-      - --host
-      - 0.0.0.0
-      - --port
-      - "9222"
-      - --advertise-host
-      - lightpanda
-      # Overriding the command drops the rest of the image's defaults, and one
-      # of them was this. The telemetry line is logged at info, so without it
-      # the check in the README has nothing to read.
-      - --log-level
-      - info
+    # Shares the app's network namespace, which makes the browser reachable at
+    # 127.0.0.1:9222 from the app and nowhere else.
+    #
+    # Not a stylistic choice. Lightpanda refuses a WebSocket whose Host header
+    # is an arbitrary name, as protection against DNS rebinding, so reaching it
+    # at `lightpanda:9222` is answered with 403. It accepts an IP or localhost,
+    # and container IPs are not stable, so the app's own loopback is the one
+    # address that is both accepted and predictable. It also means the image's
+    # default command is exactly right, including the log level the telemetry
+    # check needs.
+    #
+    # The cost: recreating the app destroys this container's network, so bring
+    # them up together with `docker compose --profile lightpanda up -d` rather
+    # than restarting the app on its own.
+    network_mode: "service:app"
+    depends_on:
+      - app
     environment:
-      # Telemetry is on by default and reports to telemetry.lightpanda.io.
-      # This browser opens other people's sites on their behalf, so it does not
-      # get to phone home about that. Verified against the nightly image: the
-      # startup line changes from disabled=false to disabled=true.
-      #
       # The check is for the variable's presence, not its value: "false" and
       # "" switch telemetry off just as surely as "true" does. Only removing
       # the line turns it back on. "true" is used anyway, so the meaning still
