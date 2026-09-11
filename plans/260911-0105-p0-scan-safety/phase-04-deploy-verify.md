@@ -175,14 +175,56 @@ ngân hàng**. Quét một site chỉ tốn ~170 MB; dựng ảnh mới là ch�
 hiểm.
 
 Ba lần đo, đều không ảnh hưởng bank-hub, và **đáy giảm đều: 244 → 217 → 199**.
-Ba điểm cùng chiều thì không còn là ngẫu nhiên. Nguyên nhân chưa xác định —
-có thể là lớp ảnh Docker tích tụ, có thể là `buff/cache` của host lớn dần.
+Ba điểm cùng chiều thì không còn là ngẫu nhiên.
 
-**Ngưỡng hành động giữ nguyên: dưới ~150 MB thì dừng `--build` trên droplet**,
-chuyển sang dựng ảnh ở nơi khác rồi đẩy sang. Với nhịp này còn khoảng hai đến
-ba lần deploy nữa là chạm. Việc rẻ nên làm trước: `docker image prune -f` trước
-mỗi lần dựng, rồi đo lại xem đáy có phục hồi không — nếu có thì thủ phạm là lớp
-ảnh cũ, không phải nhu cầu thật của build.
+### Giả thuyết "lớp ảnh tích tụ" đã bị bác bỏ
+
+Ghi lại vì nó sai theo cách dễ mắc lại: lớp ảnh Docker chiếm **đĩa**, không
+chiếm RAM, nên chúng không thể làm `MemAvailable` tụt. Và đo thật thì cũng
+không có gì để dọn — `docker image ls --filter dangling=true` trống rỗng,
+`docker system df` báo Images 15,69 GB với **0 B reclaimable**. Chạy
+`docker image prune -f` sẽ thu về đúng 0 byte.
+
+### Thủ phạm thật, đo ngày 2026-09-11
+
+| Mục | Giá trị |
+|---|---|
+| `dockerd` RssAnon | **262 MiB** |
+| AnonPages toàn máy | 528 MiB |
+| Tỷ lệ dockerd chiếm | **~50%** phần không thu hồi được |
+| dockerd chạy từ | 2026-09-10 09:19 (~26 giờ) |
+| Số lần `--build` trong quãng đó | 4 |
+
+Một dự án khác trên chính máy này từng ghi nhận `dockerd` phình tới 550 MiB sau
+108 ngày. Lần này 262 MiB trong 26 giờ — nhanh hơn hẳn theo thời gian, nhưng
+khớp nếu thứ làm nó phình là **hoạt động build**, không phải thời gian trôi.
+Điều đó cũng giải thích vì sao đáy giảm đều: mỗi lần dựng làm dockerd lớn thêm,
+và lần dựng sau đo trên phần dư đã nhỏ đi. Tự khuếch đại.
+
+### Đo thêm gì ở lần deploy tới
+
+Ghi `dockerd` RssAnon **cùng lúc** với đáy RAM. Hai cột cạnh nhau qua vài lần là
+đủ để khẳng định hay bác bỏ, và không tốn gì:
+
+```bash
+grep ^RssAnon /proc/$(pgrep -x dockerd)/status
+```
+
+### Cách xử, khi cần
+
+Khởi động lại `dockerd` thu lại phần nó giữ. Ràng buộc đã kiểm ngày 2026-09-11:
+
+- Không có `/etc/docker/daemon.json`, nên `live-restore` = false: restart dockerd
+  **dừng mọi container**, kể cả bank-hub.
+- Nhưng cả 7 container hiện đều `unless-stopped` — kể cả `bank-hub-db`, vốn từng
+  là `restart=no` trong một báo cáo cũ. Chúng tự bật lại. Gián đoạn ngắn, không
+  cần dựng tay.
+
+Nên vẫn là việc cần cửa sổ bảo trì và sự đồng ý của chủ máy, vì bank-hub là hệ
+thống production của người khác.
+
+**Ngưỡng hành động giữ nguyên: dưới ~150 MB thì dừng `--build` trên droplet**
+và chuyển sang dựng ảnh ở nơi khác rồi đẩy sang.
 
 Đo bằng cách lấy mẫu `free -m` mỗi 4 giây trong lúc `up -d --build` chạy, rồi
 lấy giá trị nhỏ nhất của cột `available`.
