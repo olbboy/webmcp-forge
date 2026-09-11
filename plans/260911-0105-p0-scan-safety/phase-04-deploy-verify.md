@@ -233,13 +233,37 @@ hỏng: `pg_isready` trả "accepting connections" ngay sau, và backend ghi
 "Prisma connected to database" rồi khởi động xong. Ghi lại vì dòng chữ `FATAL`
 trông đáng sợ hơn thực tế và lần sau sẽ lại thấy nó.
 
-### Nên làm trước lần sau: bật `live-restore`
+### Đã bật `live-restore` — 2026-09-11 04:45 UTC
 
-Không có `/etc/docker/daemon.json`, nên mỗi lần restart dockerd đều dừng cả
-bank-hub. Thêm `{"live-restore": true}` để container chạy tiếp qua một lần
-restart daemon. Bản thân việc bật nó vẫn cần một lần restart, nên hợp lý nhất là
-làm cùng lần bảo trì sau — và nó là thay đổi cấu hình máy dùng chung, cần chủ
-máy đồng ý.
+`/etc/docker/daemon.json` (trước đó không tồn tại, nên hoàn tác = xoá file):
+
+```json
+{
+  "live-restore": true
+}
+```
+
+Bật bằng `systemctl reload docker`, **không cần restart** — `docker info` báo
+`Live Restore Enabled: true` ngay, và không container nào bị đụng tới.
+
+Đã chứng minh chứ không chỉ tin: restart dockerd lần thứ hai rồi so
+`.State.StartedAt` của cả 7 container trước và sau. **Cả bảy giữ nguyên dấu
+thời gian gốc** — không cái nào bị dựng lại. `app.webmcps.net`,
+`cdn.webmcps.net/health` và lượt tự gọi trong mạng docker đều 200 ngay sau đó.
+
+Nghĩa là từ nay restart dockerd không còn là gián đoạn dịch vụ của bank-hub.
+
+### Một dòng FATAL do chính phép kiểm gây ra
+
+`docker exec bank-hub-db pg_isready` chạy dưới user `root`, mà Postgres chỉ có
+role `bank`, nên mỗi lần kiểm để lại một dòng
+`FATAL: role "root" does not exist` trong log. Server vẫn trả lời — đó là lý do
+`pg_isready` báo "accepting connections" — và healthcheck thật của container
+dùng `user=bank` thì sạch.
+
+Ghi lại để không ai đuổi theo nó, kể cả tôi: lần sau kiểm bằng
+`docker exec -u postgres bank-hub-db pg_isready -U bank -d bank_hub`, hoặc đọc
+thẳng trạng thái `healthy` của container.
 
 ### Cách xử, khi cần
 
