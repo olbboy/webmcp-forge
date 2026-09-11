@@ -47,7 +47,7 @@ export default function HomePage() {
         <Step
           n="4"
           title="Agents use the site"
-          body="registerTool on document.modelContext (navigator.modelContext fallback). Forms never auto-submit unless dryRun is false and confirmSubmit is true."
+          body="registerTool on document.modelContext, adopting one the page already has. Forms never auto-submit unless dryRun is false and confirmSubmit is true."
         />
       </section>
 

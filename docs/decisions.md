@@ -337,6 +337,38 @@ It takes a concurrency slot, because it opens a browser. It takes no per-address
 allowance: reaching it means holding the job id, which is the owner's key, and
 an owner re-scanning their own site is not the traffic that limit exists for.
 
+## The job page says who can actually call these tools
+
+The pitch for this product is that agents can use your site. The honest answer
+to "which agents, today?" is narrower than that, and an owner deciding whether
+to put a script tag on their pages should read it before they do rather than
+work it out later: today it is mostly people using ChatGPT.
+
+So the job page carries that table, with the date it was checked on it. The date
+is the point. The answer moves — an origin trial ends, an extension ships
+discovery — and a confident table with no date is how a page ends up quietly
+lying to the people who trusted it. It is not checked automatically, so it says
+that too, and says to test anything marked "not yet" rather than believe it.
+
+The bundle is worth pasting anyway, and the table says why: the tools cost
+nothing while nobody calls them, and the tag does not have to be re-pasted when
+the rest catch up.
+
+## The embed does not create the pre-standard global
+
+The draft settled on `document.modelContext`. `navigator.modelContext` is where
+the earlier providers put it, and the bundle used to mirror its context onto
+that name as well.
+
+It no longer does. Nothing we recommend reads it — the local relay we hand
+people for Cursor and Claude Desktop reads `document.modelContext` only, checked
+by opening the published bundle — so the mirror was adding a non-standard global
+to a page we are a guest on and getting nothing back for it.
+
+Reading it survives, and only reading. If a page already has a context under the
+old name, registering into that one puts the tools where its provider can see
+them, which costs a single `||`. Creating the name is what stopped.
+
 ## Things deliberately not done
 
 | Not done | Why |
