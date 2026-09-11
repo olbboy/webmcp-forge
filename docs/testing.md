@@ -1,7 +1,7 @@
 # Testing
 
 ```bash
-npm test        # 80 tests across 12 files, about 37 seconds
+npm test        # 188 tests across 21 files, about 80 seconds
 npm run lint
 npx tsc --noEmit
 ```
@@ -27,6 +27,15 @@ vitest as everything else.
 | `api.test.ts` | Scan through generate through fetching the bundle |
 | `api-publish.test.ts` | Publish states, retries, and that a download never publishes |
 | `hosted-embed.e2e.test.ts` | All three layers: real Worker, real routes, real browser loading by URL |
+| `net-guard.test.ts` | Which addresses are refused, including the IPv6 wrappers around IPv4 |
+| `ssrf.test.ts` | The refusal survives DNS, redirects and `robots.txt`, and writes no job |
+| `connection-check.test.ts` | The check after navigation, on both engines, where they differ |
+| `rate-limit.test.ts` | The window, the daily cap, and a full counter map refusing rather than evicting |
+| `scan-slot-ownership.test.ts` | A finished scan releases its own slot, never somebody else's |
+| `scan-resilience.test.ts` | One blocked or broken subpage does not lose the whole scan |
+| `click-gate.test.ts` | An agent may press what the scan saw, and nothing else |
+| `health-check.test.ts` | Verdicts per tool, and the refusal to call a site being down "all tools dead" |
+| `rescan.test.ts` | A re-scan keeps the job, the names and the switches, and changes nothing until accepted |
 
 ## The bar these are held to
 

@@ -128,6 +128,9 @@ Run it locally with `npm run cdn:dev`.
 | `GET` | `/api/jobs/:id/embed.js` | Generated script |
 | `GET` | `/api/jobs/:id/manifest.json` | Generated manifest |
 | `POST` | `/api/jobs/:id/health` | Re-open the site and report which tools can still find what they act on |
+| `POST` | `/api/jobs/:id/rescan` | Scan the site again and park the result with a diff. Changes nothing |
+| `DELETE` | `/api/jobs/:id/rescan` | Throw the parked scan away |
+| `POST` | `/api/jobs/:id/rescan/apply` | Accept the parked scan, keeping your names and switches |
 
 Scanning is limited to addresses on the public internet. A URL that resolves
 into a private range — loopback, RFC1918, or the link-local block every cloud
@@ -162,6 +165,23 @@ pages open, the report says so, and a negative verdict carries the caveat.
 
 On a server, `scripts/health-check-jobs.sh` runs the same check for every
 published job; see [docs/deployment-guide.md](./docs/deployment-guide.md).
+
+### Re-scanning a site that changed
+
+**Scan the site again** on the job page reads the site as it is now, without
+minting a new job. That matters because the script tag already on your pages
+carries this job's public id — a fresh scan would mean pasting a new tag and
+losing every rename and every switch you set.
+
+It does not change anything by itself. What comes back is a proposal: the tools
+that are **gone**, **changed**, **new**, and the count that stayed the same.
+Accept it and the tools become what the scan found, keeping the name you gave
+each one and the on/off state you chose. A tool found for the first time arrives
+switched **off** — nobody has looked at it yet.
+
+Your site is untouched either way. The file it loads only changes when you
+generate again, and the generated bundle is cleared when you accept, so the two
+never disagree about what this job contains.
 
 The job id is an unauthenticated admin key. Anyone holding it can change or
 remove your tools, which is why it never appears in a hosted URL.

@@ -9,9 +9,17 @@ import { applySelection, buildManifest, generateEmbedJs } from "./generator";
 import { SiteUnreachableError, checkJobHealth } from "./health-check";
 import { createKeyQueue } from "./key-queue";
 import { ScanBlockedError, assertScannableUrl } from "./net-guard";
+import { diffTools, mergeProposal } from "./rescan";
 import { parseScanUrl, scanSite } from "./scanner";
-import { deleteJob, getJob, readArtifact, saveArtifact, saveJob } from "./store";
-import type { ScanJob, SelectedTool } from "./types";
+import {
+  deleteJob,
+  getJob,
+  readArtifact,
+  removeArtifacts as removeArtifactFiles,
+  saveArtifact,
+  saveJob,
+} from "./store";
+import type { RescanProposal, ScanJob, SelectedTool } from "./types";
 
 const EMBED_FILENAME = "webmcp-forge.embed.js";
 const MANIFEST_FILENAME = "webmcp-forge.manifest.json";
@@ -349,6 +357,62 @@ export async function unpublishJob(id: string): Promise<ScanJob> {
       hostedEmbedUrl: undefined,
       hostedManifestUrl: undefined,
     });
+  });
+}
+
+/**
+ * Scans the site again and parks the result beside the job.
+ *
+ * Nothing the owner sees changes yet. A re-scan that quietly replaced the tool
+ * list would undo names they had chosen and switches they had turned off, and
+ * would do it for a site already serving the old ones — so this produces a
+ * proposal and a list of differences, and waits.
+ */
+export async function rescanJob(
+  id: string,
+  selfOrigin?: string
+): Promise<ScanJob> {
+  return runForJob(id, async () => {
+    const job = await requireJob(id);
+    await assertScannableUrl(parseScanUrl(job.url), { selfOrigin });
+
+    const result = await scanSite(job.url, { selfOrigin });
+    const proposal: RescanProposal = {
+      scannedAt: new Date().toISOString(),
+      url: result.url,
+      origin: result.origin,
+      pages: result.pages,
+      candidates: result.candidates,
+      changes: diffTools(job.candidates, result.candidates),
+      robotsDisallowAll: result.robotsDisallowAll,
+    };
+    return persist({ ...job, pendingRescan: proposal });
+  });
+}
+
+/** Accepts a parked re-scan, keeping the owner's names and switches. */
+export async function applyRescan(id: string): Promise<ScanJob> {
+  return runForJob(id, async () => {
+    const job = await requireJob(id);
+    if (!job.pendingRescan) {
+      throw new JobError("There is no re-scan waiting for this job", 409);
+    }
+    const merged = mergeProposal(job, job.pendingRescan);
+    // The files on disk describe the tools that were here a moment ago. Left
+    // in place they would be served as this job's bundle, which it is not.
+    await removeArtifactFiles(id, [EMBED_FILENAME, MANIFEST_FILENAME]);
+    return persist(merged);
+  });
+}
+
+/** Throws a parked re-scan away, leaving the job exactly as it was. */
+export async function discardRescan(id: string): Promise<ScanJob> {
+  return runForJob(id, async () => {
+    const job = await requireJob(id);
+    if (!job.pendingRescan) {
+      throw new JobError("There is no re-scan waiting for this job", 409);
+    }
+    return persist({ ...job, pendingRescan: undefined });
   });
 }
 
