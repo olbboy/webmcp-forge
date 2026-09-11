@@ -163,19 +163,49 @@ là hai thứ khác nhau khi production đi sau repo một commit. Bản `.env` 
 
 ### Đáy RAM khả dụng trong lúc `--build` — con số cần theo dõi
 
-| Lần | Đáy | Nội dung |
-|---|---|---|
-| 1 | 244 MB | Phase 1-3 |
-| 3 | 217 MB | Ngưỡng thành mặc định |
-| 4 | **199 MB** | Health check selector |
+| Lần | Đáy | Lấy mẫu | `dockerd` trước→sau | Nội dung |
+|---|---|---|---|---|
+| 1 | 244 MB | 4s | — | Phase 1-3 |
+| 3 | 217 MB | 4s | — | Ngưỡng thành mặc định |
+| 4 | 199 MB | 4s | — | Health check selector |
+| 5 | **184 MB** | **3s** | 34 → 39 MiB | Sửa script chạy trong container |
 
 Đây là thời điểm căng nhất của cả quy trình: build chạy `npm ci` +
 `playwright install` + biên dịch **ngay trên máy dùng chung với hệ thống đồng bộ
 ngân hàng**. Quét một site chỉ tốn ~170 MB; dựng ảnh mới là chỗ thật sự nguy
 hiểm.
 
-Ba lần đo, đều không ảnh hưởng bank-hub, và **đáy giảm đều: 244 → 217 → 199**.
-Ba điểm cùng chiều thì không còn là ngẫu nhiên.
+### Lần 5 bác bỏ cả "xu hướng" lẫn giả thuyết dockerd
+
+Lần 5 chạy **ngay sau khi** khởi động lại dockerd, tức từ điểm xuất phát tốt
+nhất từ trước tới nay: `MemAvailable` trước khi dựng là 1.227 MB, cao hơn mọi
+lần khác. Nếu dockerd tích tụ là nguyên nhân thì đáy phải phục hồi. Nó không:
+**184 MB, thấp nhất trong năm lần.**
+
+Và trong suốt lần dựng đó, `dockerd` chỉ lớn thêm **5 MiB** (34 → 39). Vậy
+dockerd không phình vì build. Nó phình theo thời gian hoặc theo thứ khác — 271
+MiB trong 26 giờ — nhưng đó là chuyện riêng, không phải chuyện của cái đáy.
+
+**Cái đáy do chính lần dựng quyết định**, không do trạng thái trước đó:
+
+| | Lần 4 | Lần 5 |
+|---|---|---|
+| Khả dụng trước khi dựng | 1.014 MB | 1.227 MB |
+| Đáy | 199 MB | 184 MB |
+| **Lần dựng tiêu thụ** | **815 MB** | **1.043 MB** |
+
+### Và một lỗi phương pháp do chính tôi gây ra
+
+Bốn lần đầu lấy mẫu mỗi **4 giây**, lần 5 mỗi **3 giây**. Mẫu dày hơn thì dễ bắt
+được đáy thật hơn. Chênh lệch 815 vs 1.043 MB có thể chỉ là lần 5 nhìn thấy cái
+đáy mà bốn lần trước bỏ lỡ, chứ không phải lần 5 tiêu thụ nhiều hơn thật.
+
+Nghĩa là **"đáy giảm đều 244 → 217 → 199" là kết luận vội**. Ba điểm cùng chiều
+trong một dãy nhiễu là chuyện thường; tôi đã ghi "chưa đủ gọi là xu hướng" ở hai
+điểm rồi lại gọi nó là xu hướng ở ba điểm, mà không có gì mới biện minh.
+
+**Từ nay lấy mẫu mỗi 1 giây, cố định**, nếu không dãy số không so được với nhau.
+Bốn con số đầu giữ lại để tham khảo, không dùng để kết luận.
 
 ### Giả thuyết "lớp ảnh tích tụ" đã bị bác bỏ
 
@@ -196,10 +226,12 @@ không có gì để dọn — `docker image ls --filter dangling=true` trống 
 | Số lần `--build` trong quãng đó | 4 |
 
 Một dự án khác trên chính máy này từng ghi nhận `dockerd` phình tới 550 MiB sau
-108 ngày. Lần này 262 MiB trong 26 giờ — nhanh hơn hẳn theo thời gian, nhưng
-khớp nếu thứ làm nó phình là **hoạt động build**, không phải thời gian trôi.
-Điều đó cũng giải thích vì sao đáy giảm đều: mỗi lần dựng làm dockerd lớn thêm,
-và lần dựng sau đo trên phần dư đã nhỏ đi. Tự khuếch đại.
+108 ngày. Lần này 262 MiB trong 26 giờ.
+
+Lúc đó tôi đoán thứ làm nó phình là **hoạt động build**, và điều đó giải thích
+được cái đáy giảm dần. **Lần đo thứ 5 bác bỏ phần thứ hai**: một lần dựng đầy đủ
+chỉ làm dockerd lớn thêm 5 MiB. Nó vẫn phình theo thời gian — và khởi động lại
+vẫn thu về 236 MiB thật — nhưng nó không phải là nguyên nhân của cái đáy.
 
 ### Đo thêm gì ở lần deploy tới
 
