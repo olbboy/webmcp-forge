@@ -170,6 +170,7 @@ là hai thứ khác nhau khi production đi sau repo một commit. Bản `.env` 
 | 4 | 199 MB | 4s | — | Health check selector |
 | 5 | 184 MB | **3s** | 34 → 39 MiB | Sửa script chạy trong container |
 | 6 | **285 MB** | **1s** | 38 → 44 MiB | Script deploy, khoảng lấy mẫu cố định |
+| 7 | **214 MB** | **1s** | 35 → 37 MiB | Quét lại vào cùng job |
 
 Đây là thời điểm căng nhất của cả quy trình: build chạy `npm ci` +
 `playwright install` + biên dịch **ngay trên máy dùng chung với hệ thống đồng bộ
@@ -228,6 +229,26 @@ khoảng lấy mẫu, và được ghi vào `/var/log/webmcp-deploy-memory.log` 
 lần nữa sẽ biết mức thật và độ dao động thật, thay vì đoán từ bốn số không so
 được với nhau.
 
+### Lần 7 — hai điểm đầu tiên so được với nhau
+
+Từ lần 6 trở đi số do `scripts/deploy.sh` sinh ra, cùng một khoảng lấy mẫu, nên
+đây là **cặp đầu tiên thật sự đặt cạnh nhau được**:
+
+| | Lần 6 | Lần 7 |
+|---|---|---|
+| Đáy | 285 MB | **214 MB** |
+| Lấy mẫu | 1s | 1s |
+| Thời gian dựng | 146s | 131s |
+| `dockerd` trước→sau | 38 → 44 MiB | 35 → 37 MiB |
+
+Hai lần đo giống hệt nhau về phương pháp, lệch nhau **71 MB**. Đó là độ dao động
+của phép đo này khi không có gì thay đổi trong cách đo — và cũng là lý do vì sao
+bốn số đầu, lấy mẫu thưa hơn và không đều, không dùng để kết luận được.
+
+**Hai điểm vẫn chưa thành xu hướng.** Ghi lại đúng như vậy, không hơn: cả hai
+đều cách ngưỡng cảnh giác 150 MB một quãng thoải mái, nên chưa phải làm gì. Vài
+lần nữa mới biết mức thật và biên dao động thật.
+
 ### Giả thuyết "lớp ảnh tích tụ" đã bị bác bỏ
 
 Ghi lại vì nó sai theo cách dễ mắc lại: lớp ảnh Docker chiếm **đĩa**, không
@@ -262,6 +283,12 @@ Ghi `dockerd` RssAnon **cùng lúc** với đáy RAM. Hai cột cạnh nhau qua 
 ```bash
 grep ^RssAnon /proc/$(pgrep -x dockerd)/status
 ```
+
+**Đã làm, và `scripts/deploy.sh` giờ tự ghi cột đó mỗi lần.** Hai lần đầu có đủ
+hai cột lại đi ngược giả thuyết: lần 6 khởi điểm `dockerd` **cao hơn** (38 MiB)
+mà đáy cũng **cao hơn** (285 MB), lần 7 khởi điểm thấp hơn (35 MiB) thì đáy thấp
+hơn (214 MB). Nếu dockerd phình là thứ ăn mất cái đáy thì phải ngược lại. Hai
+điểm chưa kết luận được gì, nhưng cũng không thấy dấu hiệu nào ủng hộ.
 
 ### Đã khởi động lại dockerd — 2026-09-11 04:41 UTC
 
