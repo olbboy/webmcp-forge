@@ -133,6 +133,7 @@ Ba lần lên production.
 | 1 · 2026-09-11 02:1x | `6d0ab34` | Phase 1-3, deploy hai bước: bật với giới hạn tắt, đọc log, rồi bật giới hạn |
 | 2 · 2026-09-11 03:1x | `7ae32e5` | Bốn mục còn lại từ rà soát mã |
 | 3 · 2026-09-11 03:4x | `1a7ac18` | Ngưỡng 3/cửa sổ và 60/ngày thành mặc định trong mã, rồi gỡ hai dòng đè trong `.env` |
+| 4 · 2026-09-11 11:3x | `8576da2` | Health check selector: API, nút trên trang job, cron hàng tuần |
 
 Lần 3 làm hai bước có chủ ý: deploy mã mới **trước** khi gỡ hai dòng trong
 `.env`. Gỡ trước thì production rơi về mặc định cũ (1 và 20) trong khoảng giữa,
@@ -162,21 +163,26 @@ là hai thứ khác nhau khi production đi sau repo một commit. Bản `.env` 
 
 ### Đáy RAM khả dụng trong lúc `--build` — con số cần theo dõi
 
-| Lần | Đáy |
-|---|---|
-| 1 | 244 MB |
-| 3 | **217 MB** |
+| Lần | Đáy | Nội dung |
+|---|---|---|
+| 1 | 244 MB | Phase 1-3 |
+| 3 | 217 MB | Ngưỡng thành mặc định |
+| 4 | **199 MB** | Health check selector |
 
 Đây là thời điểm căng nhất của cả quy trình: build chạy `npm ci` +
 `playwright install` + biên dịch **ngay trên máy dùng chung với hệ thống đồng bộ
 ngân hàng**. Quét một site chỉ tốn ~170 MB; dựng ảnh mới là chỗ thật sự nguy
 hiểm.
 
-Hai lần đo cách nhau hơn một giờ và đều không ảnh hưởng bank-hub, nhưng xu hướng
-đi xuống. **Ngưỡng hành động: nếu một lần deploy sau chạm dưới ~150 MB, dừng
-`--build` trên droplet** và chuyển sang dựng ảnh ở nơi khác rồi đẩy sang. Hai
-điểm chưa đủ để gọi là xu hướng thật — ghi lại đáy của mỗi lần deploy để lần thứ
-tư có cơ sở nói.
+Ba lần đo, đều không ảnh hưởng bank-hub, và **đáy giảm đều: 244 → 217 → 199**.
+Ba điểm cùng chiều thì không còn là ngẫu nhiên. Nguyên nhân chưa xác định —
+có thể là lớp ảnh Docker tích tụ, có thể là `buff/cache` của host lớn dần.
+
+**Ngưỡng hành động giữ nguyên: dưới ~150 MB thì dừng `--build` trên droplet**,
+chuyển sang dựng ảnh ở nơi khác rồi đẩy sang. Với nhịp này còn khoảng hai đến
+ba lần deploy nữa là chạm. Việc rẻ nên làm trước: `docker image prune -f` trước
+mỗi lần dựng, rồi đo lại xem đáy có phục hồi không — nếu có thì thủ phạm là lớp
+ảnh cũ, không phải nhu cầu thật của build.
 
 Đo bằng cách lấy mẫu `free -m` mỗi 4 giây trong lúc `up -d --build` chạy, rồi
 lấy giá trị nhỏ nhất của cột `available`.
