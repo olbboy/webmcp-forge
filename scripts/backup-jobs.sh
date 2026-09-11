@@ -3,10 +3,15 @@
 # Archives the job store to a timestamped tarball and prunes old ones.
 # Run from cron on the droplet; see docs/deployment-guide.md.
 #
-# Jobs are written with a plain write, not a temp-file rename, so a save that
-# lands mid-archive can leave a truncated JSON inside the tarball. tar reports
-# success either way, so the archive is read back and every job parsed before
-# it is allowed to count. A backup nobody has opened is just a file.
+# Jobs are written through a temporary file and renamed into place, and the
+# temporary deliberately does not end in .json (see scratchPathFor in
+# src/lib/store.ts), so this archive cannot pick one up half-written: tar either
+# sees the previous complete file or the new complete one.
+#
+# The archive is still read back and every job parsed before it is allowed to
+# count. Not for that race, which is closed, but because tar reports success
+# whether or not what it wrote can be read again — and a backup nobody has
+# opened is just a file.
 
 set -euo pipefail
 
@@ -66,7 +71,10 @@ while :; do
   # Built under a scratch name and only given a real one once it verifies, so
   # a run that fails can never delete or overwrite a backup already held here.
   scratch="$(mktemp "$DEST/.jobs-part-XXXXXX")"
-  tar -czf "$scratch" -C "$(dirname "$SRC")" "$(basename "$SRC")"
+  # The app's own half-written scratch files are excluded rather than archived:
+  # they are by definition incomplete, and restoring one would drop a fragment
+  # into the job store.
+  tar -czf "$scratch" --exclude='*.part' -C "$(dirname "$SRC")" "$(basename "$SRC")"
 
   if found="$(verify_archive "$scratch")"; then
     archive="$DEST/jobs-$(date -u +%Y%m%d-%H%M%S).tar.gz"
@@ -77,8 +85,9 @@ while :; do
     break
   fi
 
-  # A job saved while tar was reading is the likely cause, and it will not be
-  # mid-write a second time. Anything that survives a retry is real damage.
+  # Retried once in case the cause was transient — a disk that was full for a
+  # moment, a file being replaced as tar walked past it. Anything that survives
+  # a retry is real damage and must not quietly replace a good backup.
   rm -f "$scratch"
   if [ "$attempt" -ge 2 ]; then
     log "ERROR: archive failed verification twice, leaving no new backup"
@@ -91,7 +100,14 @@ done
 
 # Keep a fixed number of archives rather than a cutoff date, so the disk
 # footprint stays bounded however often this runs.
-mapfile -t stale < <(ls -1t "$DEST"/jobs-*.tar.gz 2>/dev/null | tail -n +"$((KEEP + 1))")
+# Read into the array a line at a time rather than with mapfile, which arrived
+# in bash 4: this script is also run by hand on macOS, whose /bin/bash is 3.2,
+# and there it would fail at exactly the step that deletes things.
+stale=()
+while IFS= read -r old; do
+  [ -n "$old" ] || continue
+  stale+=("$old")
+done < <(ls -1t "$DEST"/jobs-*.tar.gz 2>/dev/null | tail -n +"$((KEEP + 1))")
 if [ "${#stale[@]}" -gt 0 ]; then
   rm -f "${stale[@]}"
   log "pruned ${#stale[@]} archive(s) beyond the newest $KEEP"
