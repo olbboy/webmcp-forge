@@ -33,7 +33,6 @@ describe("generated embed.js registers and executes tools", () => {
       };
       const js = generateEmbedJs(buildManifest(job, selected, false, 1, new Date().toISOString()));
       expect(js).toContain("document.modelContext");
-      expect(js).toContain("navigator.modelContext");
       expect(js).toContain("[WebMCP Forge] registered:");
 
       const browser = await getBrowser();
@@ -57,6 +56,14 @@ describe("generated embed.js registers and executes tools", () => {
       });
       expect(registered).toContain("get_page_info");
       expect(registered).toContain("list_products");
+
+      // The standard settled on document.modelContext. Defining the old name
+      // on a page we are a guest on would be inventing a global nothing we
+      // recommend reads — the local relay reads document.modelContext only.
+      const leftOnNavigator = await page.evaluate(
+        () => typeof navigator.modelContext
+      );
+      expect(leftOnNavigator).toBe("undefined");
       expect(logs.some((l) => l.includes("[WebMCP Forge] registered:"))).toBe(
         true
       );

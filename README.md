@@ -29,7 +29,9 @@ Forge is for any HTML site. It is not a React-only SDK (MCP-B / Alibaba webmcp-n
 
 Both files are CSP-friendly static assets, not a huge inline blob.
 
-The script waits for the DOM, then registers selected tools on `document.modelContext` with fallback to `navigator.modelContext`. If neither exists, it installs a small polyfill so the page is still WebMCP-capable. It logs `[WebMCP Forge] registered: …` for each tool.
+The script waits for the DOM, then registers the selected tools on `document.modelContext`. If the page already has a context — native Chrome, a polyfill, an extension — it registers into that one rather than replacing it; otherwise it installs a small polyfill so the page is still WebMCP-capable. It logs `[WebMCP Forge] registered: …` for each tool.
+
+It does not define `navigator.modelContext`. That is where the pre-standard providers put it, and one found there is still adopted, but the standard settled on `document.modelContext` and the bundle does not add the old name to a page it is only a guest on.
 
 Optional Cursor / Claude Desktop: check **local-relay** before generate, or add:
 

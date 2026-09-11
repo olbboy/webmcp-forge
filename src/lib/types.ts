@@ -203,8 +203,7 @@ export type EmbedManifest = {
   includeLocalRelay: boolean;
   localRelaySrc: string;
   polyfill: {
-    prefer: "document.modelContext";
-    fallback: "navigator.modelContext";
+    registersOn: "document.modelContext";
     note: string;
   };
   tools: ToolCandidate[];

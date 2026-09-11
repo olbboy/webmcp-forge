@@ -642,9 +642,9 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
               </div>
               <p className="text-muted-foreground">
                 The script waits for the DOM, registers only the tools you
-                enabled on{" "}
-                <code>document.modelContext ?? navigator.modelContext</code>,
-                and logs <code>[WebMCP Forge] registered: …</code>.
+                enabled on <code>document.modelContext</code> — adopting one
+                the page already has — and logs{" "}
+                <code>[WebMCP Forge] registered: …</code>.
               </p>
               <p className="text-muted-foreground">
                 Optional Cursor / Claude Desktop snippet, if you did not bake
@@ -671,6 +671,8 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
           ) : null}
         </div>
       ) : null}
+
+      <AgentReach />
 
       <details className="rounded-xl border p-4 text-sm">
         <summary className="cursor-pointer font-medium">Scanned pages</summary>
@@ -917,5 +919,101 @@ function RescanPanel({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * When this table was last checked against the outside world.
+ *
+ * Shown to the owner rather than kept in a comment: the answer moves, and a
+ * confident table with no date on it is how a page ends up quietly lying.
+ */
+const AGENT_REACH_CHECKED = "10 September 2026";
+
+type AgentRow = {
+  agent: string;
+  reach: "yes" | "flag" | "no";
+  detail: string;
+};
+
+const AGENT_REACH: AgentRow[] = [
+  {
+    agent: "ChatGPT desktop app",
+    reach: "yes",
+    detail: "On by default, on a recent model. Not available on Enterprise or Edu plans",
+  },
+  {
+    agent: "ChatGPT Work (cloud browser)",
+    reach: "yes",
+    detail: "Observed working; OpenAI has not documented it",
+  },
+  {
+    agent: "Brave Leo",
+    reach: "flag",
+    detail: "Nightly only, behind a flag",
+  },
+  {
+    agent: "Chrome + Gemini",
+    reach: "no",
+    detail: "Chrome ships the API in an origin trial, but Gemini does not read the tools",
+  },
+  {
+    agent: "Claude for Chrome",
+    reach: "no",
+    detail: "It can invoke a tool but has no way to discover one. Claude Code, Cowork and Desktop share this extension",
+  },
+  {
+    agent: "Perplexity Comet, Sider, Monica, HARPA",
+    reach: "no",
+    detail: "No standard way for an extension to read them yet",
+  },
+];
+
+const REACH_LABEL: Record<AgentRow["reach"], string> = {
+  yes: "yes",
+  flag: "behind a flag",
+  no: "not yet",
+};
+
+/**
+ * What pasting the tag actually buys today.
+ *
+ * The honest answer is narrower than the pitch — it is mostly ChatGPT — and an
+ * owner deciding whether to put a script on their site deserves to read that
+ * before they do, not afterwards. The headline sits in the summary so it is
+ * legible without opening anything.
+ */
+function AgentReach() {
+  return (
+    <details className="rounded-xl border p-4 text-sm">
+      <summary className="cursor-pointer font-medium">
+        Which agents can call these tools today — mostly ChatGPT, for now
+      </summary>
+      <div className="mt-3 space-y-3">
+        <ul className="space-y-2">
+          {AGENT_REACH.map((row) => (
+            <li key={row.agent} className="flex flex-wrap items-baseline gap-2">
+              <Badge variant={row.reach === "yes" ? "secondary" : "outline"}>
+                {REACH_LABEL[row.reach]}
+              </Badge>
+              <span className="font-medium">{row.agent}</span>
+              <span className="text-muted-foreground">{row.detail}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-muted-foreground">
+          So installing WebMCP today mostly means serving people using ChatGPT.
+          That is an early bet with a reason behind it — ChatGPT is the largest
+          agent with this switched on by default — but do not expect broad
+          traffic yet. The tools cost nothing while nobody calls them, and the
+          tag does not have to be re-pasted when the rest catch up.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Checked {AGENT_REACH_CHECKED}. This moves quickly and we do not
+          re-check it automatically, so treat anything marked{" "}
+          <em>not yet</em> as worth testing yourself before relying on it.
+        </p>
+      </div>
+    </details>
   );
 }
