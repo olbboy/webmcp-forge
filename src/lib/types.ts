@@ -99,6 +99,29 @@ export type ToolCandidate = {
   source?: string;
 };
 
+/**
+ * What a health check found about one tool.
+ *
+ * `missing` means its selector matches nothing on any page the scan recorded,
+ * so a call would fail. `degraded` is only for the tools built from a list —
+ * some of the labels or paths are gone, the rest still work.
+ */
+export type ToolHealth = {
+  id: string;
+  name: string;
+  kind: ToolKind;
+  status: "ok" | "degraded" | "missing";
+  detail?: string;
+};
+
+export type HealthReport = {
+  checkedAt: string;
+  pagesChecked: number;
+  /** Pages that would not open. Above zero, the picture is incomplete. */
+  pagesFailed: number;
+  tools: ToolHealth[];
+};
+
 export type SelectedTool = {
   id: string;
   name: string;
@@ -137,6 +160,9 @@ export type ScanJob = {
   publishError?: string;
   hostedEmbedUrl?: string;
   hostedManifestUrl?: string;
+
+  /** The most recent health check, if one has been run. */
+  health?: HealthReport;
 };
 
 export type EmbedManifest = {

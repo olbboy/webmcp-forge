@@ -127,6 +127,7 @@ Run it locally with `npm run cdn:dev`.
 | `POST` | `/api/jobs/:id/unpublish` | Remove the bundle from the CDN |
 | `GET` | `/api/jobs/:id/embed.js` | Generated script |
 | `GET` | `/api/jobs/:id/manifest.json` | Generated manifest |
+| `POST` | `/api/jobs/:id/health` | Re-open the site and report which tools can still find what they act on |
 
 Scanning is limited to addresses on the public internet. A URL that resolves
 into a private range — loopback, RFC1918, or the link-local block every cloud
@@ -142,6 +143,25 @@ Scans are also rate limited per client address, and only a small number run at
 once, because each one costs a browser. Over the limit the endpoint answers 429
 with `Retry-After`. The thresholds are environment variables; `.env.example`
 lists them with their defaults.
+
+### Checking that the tools still work
+
+The tools hold CSS selectors captured when the site was scanned, and a redesign
+invalidates them without saying so: the embed answers an agent with "not found"
+and nobody sees it. **Check tools against the site** on the job page re-opens
+the same pages the scan visited and reports, per tool, whether its target is
+still there — `working`, `partly gone` (some labels or paths from a list), or
+`not found`.
+
+It only reports. A tool that has lost its target stays as it is until you
+decide, because re-scanning would change tools you already approved.
+
+If nothing on the site opens, you get an error rather than a report saying every
+tool is dead — that false alarm is how a real one ends up ignored. If only some
+pages open, the report says so, and a negative verdict carries the caveat.
+
+On a server, `scripts/health-check-jobs.sh` runs the same check for every
+published job; see [docs/deployment-guide.md](./docs/deployment-guide.md).
 
 The job id is an unauthenticated admin key. Anyone holding it can change or
 remove your tools, which is why it never appears in a hosted URL.

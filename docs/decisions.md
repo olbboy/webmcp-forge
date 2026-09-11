@@ -273,6 +273,29 @@ is different. The pages already gathered are worth returning, and the scan
 records the refused one as an error and carries on — which is what it does for
 any other page that fails to load.
 
+## The health check reports and does not repair
+
+A tool whose selector no longer matches is the failure this project is most
+exposed to: the selectors are a photograph of a site's markup, and nothing tells
+anyone when the photograph stops resembling the site.
+
+The check re-opens the pages the scan recorded and asks, for each tool, whether
+its target is still findable. It stops there. Re-scanning would be the obvious
+next step and it is the wrong one: the tools on a live site were chosen and
+sometimes renamed by their owner, and replacing them because a selector moved
+would undo that silently.
+
+Two things it refuses to say. If no page opens it returns an error rather than a
+report, because "all your tools are dead" is exactly wrong when a site was down
+for a minute, and a false alarm of that size is how the real one gets ignored.
+If some pages open and others do not, the report says so and every negative
+verdict carries the caveat, since the page that would not open might have been
+the one holding that selector.
+
+It takes a concurrency slot like a scan, because it opens a browser like a scan.
+Without that it would be a way around the ceiling that keeps this box usable for
+the service sharing it.
+
 ## Things deliberately not done
 
 | Not done | Why |
