@@ -210,6 +210,37 @@ Ghi `dockerd` RssAnon **cùng lúc** với đáy RAM. Hai cột cạnh nhau qua 
 grep ^RssAnon /proc/$(pgrep -x dockerd)/status
 ```
 
+### Đã khởi động lại dockerd — 2026-09-11 04:41 UTC
+
+Giả thuyết đúng. Đo trước và sau:
+
+| Mục | Trước | Sau | Thu về |
+|---|---|---|---|
+| `dockerd` RssAnon | 271 MiB | **35 MiB** | **236 MiB** |
+| AnonPages toàn máy | 536 MiB | 347 MiB | 189 MiB |
+| `MemAvailable` | 1.068 MB | **1.245 MB** | +177 MB |
+
+Nghĩa là dockerd đang giữ khoảng **236 MiB không dùng tới** sau 26 giờ và bốn
+lần dựng ảnh — gần đúng bằng khoảng cách giữa đáy lần một (244 MB) và lần bốn
+(199 MB). Hai con số khớp nhau đủ để coi là cùng một nguyên nhân.
+
+Gián đoạn: 7/7 container tự quay lại sau **8 giây**, tất cả `healthy` sau **18
+giây**. Không phải dựng tay cái nào — cả bảy đều `unless-stopped`.
+
+`bank-hub-db` ghi 6 dòng `FATAL: terminating connection due to administrator
+command` đúng giây đó. Đó là Postgres đóng kết nối khi tắt sạch, không phải
+hỏng: `pg_isready` trả "accepting connections" ngay sau, và backend ghi
+"Prisma connected to database" rồi khởi động xong. Ghi lại vì dòng chữ `FATAL`
+trông đáng sợ hơn thực tế và lần sau sẽ lại thấy nó.
+
+### Nên làm trước lần sau: bật `live-restore`
+
+Không có `/etc/docker/daemon.json`, nên mỗi lần restart dockerd đều dừng cả
+bank-hub. Thêm `{"live-restore": true}` để container chạy tiếp qua một lần
+restart daemon. Bản thân việc bật nó vẫn cần một lần restart, nên hợp lý nhất là
+làm cùng lần bảo trì sau — và nó là thay đổi cấu hình máy dùng chung, cần chủ
+máy đồng ý.
+
 ### Cách xử, khi cần
 
 Khởi động lại `dockerd` thu lại phần nó giữ. Ràng buộc đã kiểm ngày 2026-09-11:
