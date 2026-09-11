@@ -172,8 +172,14 @@ redesign breaks them silently — the embed answers an agent with "not found" an
 the site owner hears about it from a customer, if at all.
 
 ```cron
-17 4 * * 1 /opt/webmcp-forge/scripts/health-check-jobs.sh >> /var/log/webmcp-health.log 2>&1
+17 4 * * 1 cd /opt/webmcp-forge && docker compose exec -T -e WEBMCP_JOBS_DIR=/data/jobs app /app/scripts/health-check-jobs.sh >> /var/log/webmcp-health.log 2>&1
 ```
+
+It runs **inside the app container**, unlike the backup script, which runs on
+the host. The app publishes no port to the host — the tunnel reaches it over the
+compose network — so from the host there is nothing at `127.0.0.1:43127` to ask.
+That is also why the job directory is given as the container's `/data/jobs`
+rather than the host's `/opt/webmcp-forge/data/jobs`.
 
 Only published jobs are checked: an unpublished one has no bundle on anyone's
 site. Each check takes a concurrency slot like a scan does, and backs off on a
@@ -185,8 +191,8 @@ not being able to look at all.
 
 | Variable | Meaning |
 | --- | --- |
-| `WEBMCP_JOBS_DIR` | Where the jobs are. `/opt/webmcp-forge/data/jobs` |
-| `WEBMCP_APP_URL` | The app, from the droplet's point of view. `http://127.0.0.1:43127` |
+| `WEBMCP_JOBS_DIR` | Where the jobs are, as the container sees them. `/data/jobs` |
+| `WEBMCP_APP_URL` | The app, from inside its own container. `http://127.0.0.1:43127` |
 | `WEBMCP_HEALTH_RETRY_WAIT` | Seconds to wait out a 429. Default 45 |
 | `WEBMCP_HEALTH_RETRIES` | How many times. Default 4 |
 

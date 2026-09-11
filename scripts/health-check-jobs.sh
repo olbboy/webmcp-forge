@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 #
 # Asks the app to re-check every published job's tools against its live site.
-# Run from cron on the droplet; see docs/deployment-guide.md.
+#
+# Runs INSIDE the app container, unlike the backup script beside it, which runs
+# on the host. The app publishes no port to the host — it is reached through the
+# tunnel — so from outside the container there is nothing at 127.0.0.1:43127 to
+# talk to. Hence the paths below are container paths.
+#
+#   docker compose exec -T app /app/scripts/health-check-jobs.sh
+#
+# See docs/deployment-guide.md.
 #
 # Only published jobs are checked. An unpublished one has no bundle on anyone's
 # site, so a stale selector there costs nobody anything, and checking it would
@@ -13,7 +21,7 @@
 
 set -euo pipefail
 
-JOBS="${WEBMCP_JOBS_DIR:-/opt/webmcp-forge/data/jobs}"
+JOBS="${WEBMCP_JOBS_DIR:-/data/jobs}"
 APP="${WEBMCP_APP_URL:-http://127.0.0.1:43127}"
 # The endpoint takes a concurrency slot, so two of these running at once would
 # spend the whole ceiling on housekeeping. Waits rather than gives up.
