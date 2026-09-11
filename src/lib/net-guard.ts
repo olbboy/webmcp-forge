@@ -297,3 +297,29 @@ export function ipNetworkKey(raw: string): string {
   }
   return `${groups.join(":")}::/64`;
 }
+
+/**
+ * The origin to exempt from these checks, or nothing.
+ *
+ * Anything this app serves is reachable at the address it is answering on, and
+ * asking it about itself is not server-side request forgery — the "Try the demo
+ * shop" button does exactly that. Deployed, that address is a public hostname
+ * these checks allow anyway, so the exemption only ever matters in development,
+ * where the app answers on loopback.
+ *
+ * It comes from the Host header because Next rewrites `request.url` to
+ * `localhost` whatever the browser asked for, and `localhost` and `127.0.0.1`
+ * are different origins. A header the caller sets is precisely what must not be
+ * able to wave a URL past a guard, which is why this returns nothing at all
+ * outside development rather than trying to validate it.
+ */
+export function developmentSelfOrigin(request: Request): string | undefined {
+  if (process.env.NODE_ENV === "production") return undefined;
+  const host = request.headers.get("host");
+  if (!host) return undefined;
+  try {
+    return new URL(`http://${host}`).origin;
+  } catch {
+    return undefined;
+  }
+}

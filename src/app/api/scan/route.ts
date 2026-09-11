@@ -1,6 +1,10 @@
 import { SCAN_TIMEOUT_MS } from "@/lib/config";
 import { runScan } from "@/lib/jobs";
-import { SCAN_BLOCKED_MESSAGE, ScanBlockedError } from "@/lib/net-guard";
+import {
+  SCAN_BLOCKED_MESSAGE,
+  ScanBlockedError,
+  developmentSelfOrigin,
+} from "@/lib/net-guard";
 import {
   acquireScan,
   clientIp,
@@ -20,31 +24,6 @@ export const maxDuration = 60;
  * accounting: a browser is still open either way.
  */
 const HARD_TIMEOUT_MS = SCAN_TIMEOUT_MS * 2;
-
-/**
- * The origin to exempt from the scan guard, or nothing.
- *
- * The "Try the demo shop" button asks for a URL on the address the app is
- * answering on. Deployed that is a public hostname the guard allows anyway, so
- * the exemption is only ever needed while developing, where the app answers on
- * loopback.
- *
- * It is read from the Host header, because Next rewrites `request.url` to
- * `localhost` regardless of what the browser asked for, and `localhost` and
- * `127.0.0.1` are different origins. A header the caller controls is exactly
- * what must not decide this in production — which is why the whole thing is
- * switched off there rather than validated.
- */
-function developmentSelfOrigin(request: Request): string | undefined {
-  if (process.env.NODE_ENV === "production") return undefined;
-  const host = request.headers.get("host");
-  if (!host) return undefined;
-  try {
-    return new URL(`http://${host}`).origin;
-  } catch {
-    return undefined;
-  }
-}
 
 function tooMany(message: string, retryAfterSeconds: number): Response {
   return Response.json(

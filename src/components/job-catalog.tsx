@@ -11,7 +11,12 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { publishSummary } from "@/lib/jobs";
 import { cn } from "@/lib/utils";
-import type { ScanJob, SelectedTool, ToolCandidate } from "@/lib/types";
+import type {
+  HealthReport,
+  ScanJob,
+  SelectedTool,
+  ToolCandidate,
+} from "@/lib/types";
 
 type Props = {
   job: ScanJob;
@@ -52,8 +57,10 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
     job.includeLocalRelay
   );
   const [pending, setPending] = useState<
-    "generate" | "publish" | "unpublish" | null
+    "generate" | "publish" | "unpublish" | "health" | null
   >(null);
+  const [health, setHealth] = useState<HealthReport | undefined>(job.health);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
    * Failures from the publish buttons, kept apart from `error` so each message
@@ -157,6 +164,31 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
     } catch (err) {
       setActionError(
         err instanceof Error ? err.message : `Could not ${action}`
+      );
+    } finally {
+      setPending(null);
+    }
+  }
+
+  /**
+   * Re-opens the site and asks whether each tool can still find what it acts
+   * on. Nothing is changed by it — a dead selector is reported, never repaired,
+   * because repairing would alter tools the owner already approved.
+   */
+  async function runHealthCheck() {
+    setPending("health");
+    setHealthError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/health`, { method: "POST" });
+      const data = (await res.json()) as {
+        health?: HealthReport;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Could not check the tools");
+      setHealth(data.health);
+    } catch (err) {
+      setHealthError(
+        err instanceof Error ? err.message : "Could not check the tools"
       );
     } finally {
       setPending(null);
@@ -320,10 +352,19 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
         >
           {busy ? "Generating…" : "Generate embed bundle"}
         </button>
+        <button
+          type="button"
+          className={cn(buttonVariants({ variant: "outline" }))}
+          onClick={runHealthCheck}
+          disabled={busy || tools.length === 0}
+        >
+          {pending === "health" ? "Checking…" : "Check tools against the site"}
+        </button>
       </div>
       {error ? (
         <p className="text-sm text-destructive">{error}</p>
       ) : null}
+      <HealthPanel report={health} error={healthError} />
 
       {generated ? (
         <div className={cn("grid gap-4", showHosted && "lg:grid-cols-2")}>
@@ -532,5 +573,84 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
         </ul>
       </details>
     </div>
+  );
+}
+
+const HEALTH_LABEL: Record<"ok" | "degraded" | "missing", string> = {
+  ok: "working",
+  degraded: "partly gone",
+  missing: "not found",
+};
+
+const HEALTH_VARIANT: Record<
+  "ok" | "degraded" | "missing",
+  "secondary" | "outline" | "destructive"
+> = {
+  ok: "secondary",
+  degraded: "outline",
+  missing: "destructive",
+};
+
+/**
+ * Shows the last health check.
+ *
+ * Sorted worst first, because the reason to open this is to find what broke,
+ * and a list of twelve working tools with one dead one buried in the middle
+ * answers the wrong question.
+ */
+function HealthPanel({
+  report,
+  error,
+}: {
+  report?: HealthReport;
+  error: string | null;
+}) {
+  if (error) return <p className="text-sm text-destructive">{error}</p>;
+  if (!report) return null;
+
+  const rank = { missing: 0, degraded: 1, ok: 2 } as const;
+  const rows = [...report.tools].sort((a, b) => rank[a.status] - rank[b.status]);
+  const broken = rows.filter((t) => t.status !== "ok").length;
+
+  return (
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-base">
+          {broken === 0
+            ? "Every tool can still find what it acts on"
+            : `${broken} tool${broken === 1 ? "" : "s"} need attention`}
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Checked {new Date(report.checkedAt).toLocaleString()} across{" "}
+          {report.pagesChecked} page{report.pagesChecked === 1 ? "" : "s"}
+          {report.pagesFailed > 0
+            ? ` — ${report.pagesFailed} would not open, so this is incomplete`
+            : ""}
+          .
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <ul className="space-y-2 text-sm">
+          {rows.map((tool) => (
+            <li key={tool.id} className="flex flex-wrap items-center gap-2">
+              <Badge variant={HEALTH_VARIANT[tool.status]}>
+                {HEALTH_LABEL[tool.status]}
+              </Badge>
+              <code>{tool.name}</code>
+              {tool.detail ? (
+                <span className="text-muted-foreground">{tool.detail}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        {broken > 0 ? (
+          <p className="text-sm text-muted-foreground">
+            A tool that cannot find its target answers an agent with an error
+            rather than doing nothing visible. Re-scan the site to pick up its
+            current markup, then generate again.
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

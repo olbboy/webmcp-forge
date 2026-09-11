@@ -165,6 +165,31 @@ strength of that measurement. Raising it further wants the same measurement
 again at the new number — the ceiling that matters is `memory.current` of both
 cgroups, not `anon`, and not what `docker stats` reports.
 
+## Weekly tool health check
+
+The selectors in a generated bundle are a photograph of a site's markup. A
+redesign breaks them silently — the embed answers an agent with "not found" and
+the site owner hears about it from a customer, if at all.
+
+```cron
+17 4 * * 1 /opt/webmcp-forge/scripts/health-check-jobs.sh >> /var/log/webmcp-health.log 2>&1
+```
+
+Only published jobs are checked: an unpublished one has no bundle on anyone's
+site. Each check takes a concurrency slot like a scan does, and backs off on a
+429 rather than competing with a customer who is waiting.
+
+It exits zero whatever it finds. The findings are in the log — a non-zero exit
+would have cron mailing about an ordinary result, and failing is reserved for
+not being able to look at all.
+
+| Variable | Meaning |
+| --- | --- |
+| `WEBMCP_JOBS_DIR` | Where the jobs are. `/opt/webmcp-forge/data/jobs` |
+| `WEBMCP_APP_URL` | The app, from the droplet's point of view. `http://127.0.0.1:43127` |
+| `WEBMCP_HEALTH_RETRY_WAIT` | Seconds to wait out a 429. Default 45 |
+| `WEBMCP_HEALTH_RETRIES` | How many times. Default 4 |
+
 ## Checks that have earned their place
 
 - `docker compose logs lightpanda | grep "telemetry status"` after any image

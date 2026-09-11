@@ -6,6 +6,7 @@ import {
   unpublishEmbed,
 } from "./cdn";
 import { applySelection, buildManifest, generateEmbedJs } from "./generator";
+import { SiteUnreachableError, checkJobHealth } from "./health-check";
 import { createKeyQueue } from "./key-queue";
 import { ScanBlockedError, assertScannableUrl } from "./net-guard";
 import { parseScanUrl, scanSite } from "./scanner";
@@ -348,6 +349,40 @@ export async function unpublishJob(id: string): Promise<ScanJob> {
       hostedEmbedUrl: undefined,
       hostedManifestUrl: undefined,
     });
+  });
+}
+
+/**
+ * Re-opens the site and records which tools can still find what they act on.
+ *
+ * Serialised with the other writes to this job: the report is saved onto the
+ * job, and a generate running at the same time would otherwise read the job
+ * before the report landed and write it back out without one.
+ */
+export async function runHealthCheck(
+  id: string,
+  selfOrigin?: string
+): Promise<ScanJob> {
+  return runForJob(id, async () => {
+    const job = await requireJob(id);
+    if (job.status === "error") {
+      throw new JobError(job.error || "Scan failed", 400);
+    }
+    if (job.candidates.length === 0) {
+      throw new JobError("This job has no tools to check", 409);
+    }
+    try {
+      const health = await checkJobHealth(job, selfOrigin);
+      return persist({ ...job, health });
+    } catch (err) {
+      // The site being down is the caller's news, not a server fault, and the
+      // job keeps whatever report it had rather than being overwritten with a
+      // worthless one.
+      if (err instanceof SiteUnreachableError) {
+        throw new JobError(err.message, 502);
+      }
+      throw err;
+    }
   });
 }
 
