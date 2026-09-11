@@ -51,13 +51,26 @@ from before the Lightpanda switch is at `.env.bak.before-lightpanda`.
 ```bash
 ssh vtb-vps
 cd /opt/webmcp-forge
-git fetch origin && git reset --hard origin/main
 npm run cdn:deploy                        # only when cdn/ changed
-docker compose --profile lightpanda up -d --build
+./scripts/deploy.sh
 ```
 
-Drop `--profile lightpanda` if the browser service is not in use, and drop
-`--build` when only configuration changed.
+`deploy.sh` does the fetch, the reset and the build, and measures how close the
+build came to exhausting the box while it runs — appending a line to
+`/var/log/webmcp-deploy-memory.log`.
+
+The measurement is in the script rather than in this guide because a note here
+did not stop the sampling interval being changed by hand between two runs, and
+that alone moved the number enough to suggest a trend that was not there. A
+finer sample finds troughs a coarser one walks past, so runs are only comparable
+when they are sampled identically. The interval is not a parameter.
+
+A build that reused every layer is labelled `cached` in that log: its floor says
+nothing about what a build costs and must not be read alongside the others.
+
+Set `WEBMCP_COMPOSE_PROFILE=` if the browser service is not in use. When only
+configuration changed, `docker compose --profile lightpanda up -d` on its own is
+enough — no build, and nothing worth measuring.
 
 Then confirm, from anywhere:
 
