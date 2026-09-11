@@ -168,7 +168,8 @@ là hai thứ khác nhau khi production đi sau repo một commit. Bản `.env` 
 | 1 | 244 MB | 4s | — | Phase 1-3 |
 | 3 | 217 MB | 4s | — | Ngưỡng thành mặc định |
 | 4 | 199 MB | 4s | — | Health check selector |
-| 5 | **184 MB** | **3s** | 34 → 39 MiB | Sửa script chạy trong container |
+| 5 | 184 MB | **3s** | 34 → 39 MiB | Sửa script chạy trong container |
+| 6 | **285 MB** | **1s** | 38 → 44 MiB | Script deploy, khoảng lấy mẫu cố định |
 
 Đây là thời điểm căng nhất của cả quy trình: build chạy `npm ci` +
 `playwright install` + biên dịch **ngay trên máy dùng chung với hệ thống đồng bộ
@@ -205,7 +206,27 @@ trong một dãy nhiễu là chuyện thường; tôi đã ghi "chưa đủ gọ
 điểm rồi lại gọi nó là xu hướng ở ba điểm, mà không có gì mới biện minh.
 
 **Từ nay lấy mẫu mỗi 1 giây, cố định**, nếu không dãy số không so được với nhau.
-Bốn con số đầu giữ lại để tham khảo, không dùng để kết luận.
+
+### Lần 6 đóng lại câu chuyện "xu hướng"
+
+Lần 6 lấy mẫu **dày nhất** — mỗi giây — nên nếu có đáy sâu thì nó là lần dễ bắt
+được nhất. Kết quả là **285 MB, cao nhất trong sáu lần**.
+
+| Lần | 1 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|
+| Đáy (MB) | 244 | 217 | 199 | 184 | **285** |
+| Lấy mẫu | 4s | 4s | 4s | 3s | **1s** |
+
+Dãy này không có xu hướng. Nó dao động trong khoảng 184–285 MB quanh một mức
+khoảng 220, và "244 → 217 → 199" chỉ là ba lần rút thăm liên tiếp cùng chiều.
+Điều kiện máy lúc dựng — bank-hub đang làm gì, page cache ở đâu — giải thích
+được biến thiên đó mà không cần giả thuyết nào.
+
+**Ngưỡng 150 MB giữ lại làm mức cảnh giác**, không phải điểm cuối của một đường
+dốc. Từ lần 6 trở đi mọi số đều do `scripts/deploy.sh` sinh ra với cùng một
+khoảng lấy mẫu, và được ghi vào `/var/log/webmcp-deploy-memory.log` — nên vài
+lần nữa sẽ biết mức thật và độ dao động thật, thay vì đoán từ bốn số không so
+được với nhau.
 
 ### Giả thuyết "lớp ảnh tích tụ" đã bị bác bỏ
 
