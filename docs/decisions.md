@@ -296,6 +296,47 @@ It takes a concurrency slot like a scan, because it opens a browser like a scan.
 Without that it would be a way around the ceiling that keeps this box usable for
 the service sharing it.
 
+## A re-scan proposes, it does not replace
+
+Re-scanning had one honest answer until now: start a new scan, get a new job,
+paste a new script tag, and set every tool up again. The tag is the part that
+makes it expensive — it is already on somebody's pages, and it carries the job's
+public id. So a re-scan keeps the job: same id, same public id, same tag.
+
+Keeping the job is what forces the rest of the design. The tools in it were
+chosen, renamed and sometimes deliberately switched off by their owner, and a
+scan finding different markup is a reason to ask them, not a reason to decide.
+So the scan is parked on the job as a proposal with a list of differences, and
+nothing moves until somebody answers.
+
+What the difference is computed from is deliberately narrow: the selectors and
+the click allowlist, not names or descriptions. The owner is allowed to rename a
+tool, and a scan re-deriving the original name must not report that back to them
+as something their site did.
+
+Accepting keeps the name and the switch for every tool that survived. A tool
+found for the first time arrives switched **off**. It has never been looked at,
+and a tool nobody chose should not start answering agents on a customer's site
+because the markup moved.
+
+Accepting also bumps the version and deletes the generated files. The files were
+built from the tools that were there a moment ago, and serving them as this
+job's bundle would be a lie about what it contains — but the copy already on the
+CDN keeps serving, because the customer's site should not change under them
+until they generate again. The version moves even though nothing was published,
+because a rebuild of a missing artifact reads the version off the job: left
+alone, one number would come to mean two different bundles, and that number is
+what the CDN hands out as its cache validator. The last health check is dropped
+at the same time, since its verdicts were about tools that may no longer exist.
+
+When nothing differs, the panel offers no way to accept. Accepting a no-op would
+delete a bundle that is still correct and make its owner generate again for
+nothing.
+
+It takes a concurrency slot, because it opens a browser. It takes no per-address
+allowance: reaching it means holding the job id, which is the owner's key, and
+an owner re-scanning their own site is not the traffic that limit exists for.
+
 ## Things deliberately not done
 
 | Not done | Why |

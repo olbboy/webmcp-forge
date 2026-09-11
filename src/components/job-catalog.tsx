@@ -13,9 +13,12 @@ import type { publishSummary } from "@/lib/jobs";
 import { cn } from "@/lib/utils";
 import type {
   HealthReport,
+  PageSnapshot,
+  RescanProposal,
   ScanJob,
   SelectedTool,
   ToolCandidate,
+  ToolChange,
 } from "@/lib/types";
 
 type Props = {
@@ -53,14 +56,33 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
   const [tools, setTools] = useState<ToolCandidate[]>(() =>
     job.candidates.map((c) => ({ ...c }))
   );
+  /** What the last accepted scan saw, which a re-scan replaces. */
+  const [pages, setPages] = useState<PageSnapshot[]>(job.pages);
   const [includeLocalRelay, setIncludeLocalRelay] = useState(
     job.includeLocalRelay
   );
   const [pending, setPending] = useState<
-    "generate" | "publish" | "unpublish" | "health" | null
+    | "generate"
+    | "publish"
+    | "unpublish"
+    | "health"
+    | "rescan"
+    | "apply"
+    | "discard"
+    | null
   >(null);
   const [health, setHealth] = useState<HealthReport | undefined>(job.health);
   const [healthError, setHealthError] = useState<string | null>(null);
+  /**
+   * A re-scan that has been run and is waiting for an answer. Seeded from the
+   * job so that closing the tab mid-decision does not throw the scan away.
+   */
+  const [proposal, setProposal] = useState<RescanProposal | undefined>(
+    job.pendingRescan
+  );
+  const [rescanError, setRescanError] = useState<string | null>(null);
+  /** Set once a proposal is accepted, to explain why the tools below moved. */
+  const [rescanApplied, setRescanApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /**
    * Failures from the publish buttons, kept apart from `error` so each message
@@ -103,7 +125,10 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
   // The server only requires a configured CDN and a bundle on disk, so every
   // state except "already published" has a way forward. Leaving `skipped` out
   // would strand any job generated before the CDN was switched on.
-  const canPublish = cdnConfigured && publish.publishStatus !== "published";
+  // `generated` matters as much as the status: applying a re-scan deletes the
+  // bundle these buttons would upload.
+  const canPublish =
+    cdnConfigured && generated && publish.publishStatus !== "published";
   const publishLabel =
     publish.publishStatus === "failed"
       ? "Try publishing again"
@@ -111,7 +136,7 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
         ? "Publish again"
         : "Publish";
 
-  const pagesOk = job.pages.filter((p) => !p.error).length;
+  const pagesOk = pages.filter((p) => !p.error).length;
 
   function updateTool(id: string, patch: Partial<ToolCandidate>) {
     setTools((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -190,6 +215,67 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
       setHealthError(
         err instanceof Error ? err.message : "Could not check the tools"
       );
+    } finally {
+      setPending(null);
+    }
+  }
+
+  /**
+   * Opens the site again and parks what it finds.
+   *
+   * Deliberately two steps. The tools on a live site were chosen, renamed and
+   * switched off by their owner; a scan finding different markup is a reason to
+   * ask them, not a reason to overwrite that.
+   */
+  async function runRescan() {
+    setPending("rescan");
+    setRescanError(null);
+    setRescanApplied(false);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/rescan`, { method: "POST" });
+      const data = (await res.json()) as {
+        pendingRescan?: RescanProposal;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Could not scan the site");
+      setProposal(data.pendingRescan);
+    } catch (err) {
+      setRescanError(
+        err instanceof Error ? err.message : "Could not scan the site"
+      );
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function decideRescan(decision: "apply" | "discard") {
+    setPending(decision);
+    setRescanError(null);
+    try {
+      const res = await fetch(
+        `/api/jobs/${job.id}/rescan${decision === "apply" ? "/apply" : ""}`,
+        { method: decision === "apply" ? "POST" : "DELETE" }
+      );
+      const data = (await res.json()) as {
+        candidates?: ToolCandidate[];
+        pages?: PageSnapshot[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Could not finish");
+      setProposal(undefined);
+      if (decision === "apply" && data.candidates) {
+        setTools(data.candidates.map((c) => ({ ...c })));
+        if (data.pages) setPages(data.pages);
+        setRescanApplied(true);
+        // The bundle on disk was built from the old tools and has been deleted,
+        // so the download links below would now 404. What is already on the
+        // customer's site keeps serving until they generate again.
+        setGenerated(false);
+        // A check of the tools that no longer exist would only confuse.
+        setHealth(undefined);
+      }
+    } catch (err) {
+      setRescanError(err instanceof Error ? err.message : "Could not finish");
     } finally {
       setPending(null);
     }
@@ -360,14 +446,33 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
         >
           {pending === "health" ? "Checking…" : "Check tools against the site"}
         </button>
+        <button
+          type="button"
+          className={cn(buttonVariants({ variant: "outline" }))}
+          onClick={runRescan}
+          disabled={busy || Boolean(proposal)}
+        >
+          {pending === "rescan" ? "Scanning…" : "Scan the site again"}
+        </button>
       </div>
       {error ? (
         <p className="text-sm text-destructive">{error}</p>
       ) : null}
+      <RescanPanel
+        proposal={proposal}
+        error={rescanError}
+        applied={rescanApplied}
+        busy={busy}
+        pending={pending}
+        onApply={() => decideRescan("apply")}
+        onDiscard={() => decideRescan("discard")}
+      />
       <HealthPanel report={health} error={healthError} />
 
-      {generated ? (
-        <div className={cn("grid gap-4", showHosted && "lg:grid-cols-2")}>
+      {generated || publish.publicId ? (
+        <div
+          className={cn("grid gap-4", showHosted && generated && "lg:grid-cols-2")}
+        >
           {showHosted ? (
             <Card>
               <CardHeader className="space-y-2">
@@ -448,6 +553,13 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
                   </p>
                 ) : null}
 
+                {!generated && publish.hostedEmbedUrl ? (
+                  <p className="text-muted-foreground">
+                    The tools have changed since this file was built. Visitors
+                    keep getting the version above until you generate again.
+                  </p>
+                ) : null}
+
                 {publish.publishError ? (
                   <p className="text-sm text-destructive">
                     {publish.publishError}
@@ -495,6 +607,7 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
             </Card>
           ) : null}
 
+          {generated ? (
           <Card>
             <CardHeader>
               <CardTitle>Self-host</CardTitle>
@@ -555,13 +668,14 @@ export function JobCatalog({ job, cdnConfigured }: Props) {
               </button>
             </CardContent>
           </Card>
+          ) : null}
         </div>
       ) : null}
 
       <details className="rounded-xl border p-4 text-sm">
         <summary className="cursor-pointer font-medium">Scanned pages</summary>
         <ul className="mt-3 space-y-2 text-muted-foreground">
-          {job.pages.map((page) => (
+          {pages.map((page) => (
             <li key={page.url}>
               <span className="text-foreground">{page.title || "(untitled)"}</span>
               {" — "}
@@ -650,6 +764,157 @@ function HealthPanel({
             current markup, then generate again.
           </p>
         ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+const CHANGE_LABEL: Record<ToolChange["change"], string> = {
+  removed: "gone",
+  updated: "changed",
+  added: "new",
+  unchanged: "same",
+};
+
+const CHANGE_VARIANT: Record<
+  ToolChange["change"],
+  "secondary" | "outline" | "destructive"
+> = {
+  removed: "destructive",
+  updated: "outline",
+  added: "secondary",
+  unchanged: "outline",
+};
+
+/**
+ * Shows a re-scan that has not been accepted yet.
+ *
+ * The panel exists because of what a re-scan is allowed to cost. The script tag
+ * is already on somebody's site, so the job keeps its id either way — but the
+ * tools in it were chosen by their owner, and swapping them because the markup
+ * moved would undo that silently. So this shows what would change, and waits.
+ */
+function RescanPanel({
+  proposal,
+  error,
+  applied,
+  busy,
+  pending,
+  onApply,
+  onDiscard,
+}: {
+  proposal?: RescanProposal;
+  error: string | null;
+  applied: boolean;
+  busy: boolean;
+  pending: string | null;
+  onApply: () => void;
+  onDiscard: () => void;
+}) {
+  if (error) return <p className="text-sm text-destructive">{error}</p>;
+
+  if (!proposal) {
+    if (!applied) return null;
+    return (
+      <p className="text-sm text-muted-foreground" role="status">
+        The list below is what the site has now. Anything found for the first
+        time arrived switched off. Nothing has reached your site yet — generate
+        again when you are ready.
+      </p>
+    );
+  }
+
+  const moved = proposal.changes.filter((c) => c.change !== "unchanged");
+  const same = proposal.changes.length - moved.length;
+
+  return (
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-base">
+          {moved.length === 0
+            ? "The site has not changed"
+            : `${moved.length} difference${moved.length === 1 ? "" : "s"} since the last scan`}
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Scanned {new Date(proposal.scannedAt).toLocaleString()}. Nothing has
+          been changed yet.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {moved.length > 0 ? (
+          <ul className="space-y-2 text-sm">
+            {moved.map((change) => (
+              <li key={change.id} className="flex flex-wrap items-center gap-2">
+                <Badge variant={CHANGE_VARIANT[change.change]}>
+                  {CHANGE_LABEL[change.change]}
+                </Badge>
+                <code>{change.name}</code>
+                <span className="text-muted-foreground">{change.kind}</span>
+                {change.detail ? (
+                  <span className="text-muted-foreground">
+                    — {change.detail}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {same > 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {same} tool{same === 1 ? "" : "s"} unchanged.
+          </p>
+        ) : null}
+
+        {moved.length > 0 ? (
+          <ul className="space-y-1 text-xs text-muted-foreground">
+            <li>
+              Accepting keeps every name you chose and every switch you set. A
+              tool found for the first time arrives switched off.
+            </li>
+            <li>
+              Your site is untouched either way. The file it loads only changes
+              when you generate again.
+            </li>
+            <li>
+              Any renames you have typed below but not yet generated will be
+              replaced by this list.
+            </li>
+          </ul>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          {/* Nothing differs, so accepting would only delete a bundle that is
+              still correct and make its owner generate again for no reason.
+              With nothing to decide, there is one button. */}
+          {moved.length > 0 ? (
+            <button
+              type="button"
+              className={cn(buttonVariants({ size: "sm" }))}
+              onClick={onApply}
+              disabled={busy}
+            >
+              {pending === "apply" ? "Applying…" : "Use the new scan"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={cn(
+              buttonVariants({
+                variant: moved.length > 0 ? "outline" : "default",
+                size: "sm",
+              })
+            )}
+            onClick={onDiscard}
+            disabled={busy}
+          >
+            {pending === "discard"
+              ? "Closing…"
+              : moved.length > 0
+                ? "Keep what I have"
+                : "Close"}
+          </button>
+        </div>
       </CardContent>
     </Card>
   );

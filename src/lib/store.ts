@@ -116,6 +116,23 @@ export async function saveArtifact(
   return dest;
 }
 
+/**
+ * Removes a job's generated files.
+ *
+ * Used when the tools they were built from have changed: the bytes on disk
+ * still describe the old set, and serving them as this job's bundle would be a
+ * lie about what it now contains.
+ */
+export async function removeArtifacts(
+  id: string,
+  filenames: string[]
+): Promise<void> {
+  if (!isJobId(id)) return;
+  for (const filename of filenames) {
+    await unlink(path.join(jobsDir(), id, filename)).catch(() => {});
+  }
+}
+
 export async function readArtifact(
   id: string,
   filename: string

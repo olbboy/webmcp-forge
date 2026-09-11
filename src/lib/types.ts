@@ -122,6 +122,32 @@ export type HealthReport = {
   tools: ToolHealth[];
 };
 
+/** How one tool differs between what a job holds and what a re-scan found. */
+export type ToolChange = {
+  id: string;
+  name: string;
+  kind: ToolKind;
+  change: "added" | "removed" | "updated" | "unchanged";
+  detail?: string;
+};
+
+/**
+ * A re-scan waiting to be accepted.
+ *
+ * Held beside the job rather than written over it: the tools on a live site
+ * were chosen by their owner, and a scan finding different markup is a reason
+ * to ask, not a reason to decide.
+ */
+export type RescanProposal = {
+  scannedAt: string;
+  url: string;
+  origin: string;
+  pages: PageSnapshot[];
+  candidates: ToolCandidate[];
+  changes: ToolChange[];
+  robotsDisallowAll?: boolean;
+};
+
 export type SelectedTool = {
   id: string;
   name: string;
@@ -163,6 +189,9 @@ export type ScanJob = {
 
   /** The most recent health check, if one has been run. */
   health?: HealthReport;
+
+  /** A re-scan that has been run but not yet accepted or discarded. */
+  pendingRescan?: RescanProposal;
 };
 
 export type EmbedManifest = {
